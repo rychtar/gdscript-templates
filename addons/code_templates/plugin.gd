@@ -7,9 +7,14 @@ var templates: Dictionary = {}
 var config_path: String = "res://addons/code_templates/templates.json"
 var user_config_path: String = "user://code_templates.json"
 var shortcut: Shortcut
+
+var settings_path: String = "user://code_templates_settings.json"
+var use_default_templates: bool = true
+
 var code_completion_prefixes: PackedStringArray = []
 
 func _enter_tree():
+	load_settings()
 	load_templates()
 	update_code_completion_cache()
 		
@@ -89,7 +94,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	# create window
 	var window = Window.new()
 	window.title = "Code Templates"
-	var base_width = int(1200 * size_multiplier)  # Wider for preview panel
+	var base_width = int(1200 * size_multiplier)
 	var base_height = int(min(matches.size() * 60 + 80, 800) * size_multiplier)
 	window.size = Vector2i(base_width, base_height)
 	window.min_size = Vector2i(int(1000 * size_multiplier), int(400 * size_multiplier))
@@ -408,25 +413,21 @@ func position_cursor_with_indent(text_edit: TextEdit, original_template: String,
 	text_edit.set_caret_column(target_col)
 
 func load_templates():
-	# Load base plugin templates
-	if FileAccess.file_exists(config_path):
-		var file = FileAccess.open(config_path, FileAccess.READ)
-		if file:
-			var json = JSON.new()
-			var content = file.get_as_text()
-			file.close()
-			
-			if json.parse(content) == OK:
-				templates = json.get_data()
-				debug_print("✓ Loaded ", templates.size(), " templates from ", config_path)
-			else:
-				debug_print("✗ Error during parsing ", config_path)
-				_load_default_templates()
-	else:
-		debug_print("✗ File ", config_path, " does not exist, creating default...")
-		_load_default_templates()
-		save_default_templates()
+	templates.clear()
 	
+	if use_default_templates: 
+	# Load base plugin templates
+		if FileAccess.file_exists(config_path):
+			var file = FileAccess.open(config_path, FileAccess.READ)
+			if file:
+				var json = JSON.new()
+				var content = file.get_as_text()
+				file.close()
+				
+				if json.parse(content) == OK:
+					templates = json.get_data()
+					debug_print("✓ Loaded ", templates.size(), " templates from ", config_path)
+
 	# Load user created tempaltes
 	if FileAccess.file_exists(user_config_path):
 		var file = FileAccess.open(user_config_path, FileAccess.READ)
@@ -447,31 +448,6 @@ func update_code_completion_cache():
 	code_completion_prefixes.clear()
 	for keyword in templates.keys():
 		code_completion_prefixes.append(keyword)
-
-func _load_default_templates():
-	# Default templates
-	templates = {
-		"prnt": 'debug_print("|CURSOR|")',
-		"fori": "for i in range({0}):\n\t|CURSOR|",
-		"fore": "for {0} in {1}:\n\t|CURSOR|",
-		"ifn": "if {0} != null:\n\t|CURSOR|",
-		"ife": "if {0} == {1}:\n\t|CURSOR|",
-		"elif": "elif {0}:\n\t|CURSOR|",
-		"else": "else:\n\t|CURSOR|",
-		"ready": "func _ready():\n\t|CURSOR|",
-		"process": "func _process(delta):\n\t|CURSOR|",
-		"physics": "func _physics_process(delta):\n\t|CURSOR|",
-		"input": "func _input(event):\n\t|CURSOR|",
-		"func": "func {0}():\n\t|CURSOR|",
-		"funcr": "func {0}() -> {1}:\n\t|CURSOR|\n\treturn",
-		"signal": "signal {0}",
-		"export": "@export var {0}: {1}",
-		"onready": "@onready var {0} = ${1}",
-		"match": "match {0}:\n\t{1}:\n\t\t|CURSOR|",
-		"class": "class_name {0}\nextends {1}\n\n|CURSOR|",
-		"var": "var {0}: {1} = {2}|CURSOR|",
-		"const": "const {0}: {1} = {2}|CURSOR|",
-	}
 
 func save_default_templates():
 	# Save default templates
@@ -506,6 +482,16 @@ func _open_settings():
 	label.text = "Adjust templates in JSON format:\nUsage: {0}, {1} for params, |CURSOR| cursor position after code completition"
 	vbox.add_child(label)
 	
+	var settings_box = HBoxContainer.new()
+	var use_defaults_checkbox = CheckBox.new()
+	use_defaults_checkbox.text = "Use default templates"
+	use_defaults_checkbox.button_pressed = use_default_templates
+	settings_box.add_child(use_defaults_checkbox)
+	vbox.add_child(settings_box)
+	
+	var separator = HSeparator.new()
+	vbox.add_child(separator)
+	
 	var text_edit = TextEdit.new()
 	
 	var user_templates_only = {}
@@ -528,6 +514,9 @@ func _open_settings():
 	var save_button = Button.new()
 	save_button.text = "Save"
 	save_button.pressed.connect(func():
+		use_default_templates = use_defaults_checkbox.button_pressed
+		save_settings()
+		
 		var json = JSON.new()
 		if json.parse(text_edit.text) == OK:
 			var new_user_templates = json.get_data()
@@ -556,3 +545,26 @@ func _open_settings():
 func debug_print(a1 = "", a2 = "", a3 = "", a4 = "", a5 = "") -> void:
 	if DEBUG_MODE:
 		print("[Code_Templates_plugin] ", a1, a2, a3, a4, a5)
+		
+func load_settings():
+	if FileAccess.file_exists(settings_path):
+		var file = FileAccess.open(settings_path, FileAccess.READ)
+		if file:
+			var json = JSON.new()
+			var content = file.get_as_text()
+			file.close()
+			if json.parse(content) == OK:
+				var settings = json.get_data()
+				if settings is Dictionary and "use_default_templates" in settings:
+					use_default_templates = settings.use_default_templates
+					print("✓ Settings loaded: use_default_templates = ", use_default_templates)
+
+func save_settings():
+	var settings = {
+		"use_default_templates": use_default_templates
+	}
+	var file = FileAccess.open(settings_path, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(settings, "\t"))
+		file.close()
+		print("✓ Settings saved")
