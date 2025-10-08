@@ -351,13 +351,14 @@ func try_expand_template() -> bool:
 			break
 	
 	# delete original text and place update template
+	text_edit.begin_complex_operation()
 	text_edit.select(line_idx, keyword_start, line_idx, col)
 	text_edit.delete_selection()
 	text_edit.insert_text_at_caret(expanded)
 	
 	# place cursor
 	position_cursor_with_indent(text_edit, template_text, expanded, line_idx, keyword_start, current_indent)
-	
+	text_edit.end_complex_operation()
 	return true
 
 func expand_template(template: String, params: Array) -> String:
