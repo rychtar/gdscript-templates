@@ -272,6 +272,21 @@ func _insert_completion(text_edit: TextEdit, partial: String, keyword: String):
 	# change for keyword
 	text_edit.select(line_idx, start_col, line_idx, col)
 	text_edit.insert_text_at_caret(keyword + " ")
+	
+	if keyword in templates:
+		var template = templates[keyword]
+		var params = _extract_params_from_template(template)
+		
+		if params.size() > 0:
+			# create hint
+			var hint_text ="Params: " + " ".join(params)
+			
+			# editor set hint
+			await get_tree().process_frame
+			text_edit.set_code_hint(hint_text)
+			
+	await get_tree().process_frame
+	text_edit.cancel_code_completion()
 
 func get_current_script_editor() -> TextEdit:
 	var script_editor = get_editor_interface().get_script_editor()
