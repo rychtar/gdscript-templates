@@ -3,6 +3,9 @@ extends EditorPlugin
 
 const DEBUG_MODE = true
 
+#OS specific vars
+var is_macos = OS.get_name() == "macOS"
+
 # paths
 var config_path: String = "res://addons/code_templates/templates.json"
 var user_config_path: String = "user://code_templates.json"
@@ -31,6 +34,7 @@ func _enter_tree():
 func _exit_tree():
 	remove_tool_menu_item("Code Templates Settings")
 
+# TODO: custom shortcut in settings + auto detection?
 func _input(event: InputEvent):
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.ctrl_pressed and event.keycode == KEY_E:
@@ -87,8 +91,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	# sort by keyword
 	matches.sort_custom(func(a, b): return a.keyword < b.keyword)
 	
-	# setting macos retina specific adjustments
-	var is_macos = OS.get_name() == "macOS"
+	# setting macos retina specific adjustments	
 	var size_multiplier = 1.3 if is_macos else 1.0
 	
 	# create window
@@ -447,33 +450,14 @@ func position_cursor_with_indent(text_edit: TextEdit, original_template: String,
 func load_templates():
 	templates.clear()
 	
-	if use_default_templates: 
-	# Load base plugin templates
-		if FileAccess.file_exists(config_path):
-			var file = FileAccess.open(config_path, FileAccess.READ)
-			if file:
-				var json = JSON.new()
-				var content = file.get_as_text()
-				file.close()
-				
-				if json.parse(content) == OK:
-					templates = json.get_data()
-					debug_print("✓ Loaded ", templates.size(), " templates from ", config_path)
-
-	# Load user created tempaltes
-	if FileAccess.file_exists(user_config_path):
-		var file = FileAccess.open(user_config_path, FileAccess.READ)
-		if file:
-			var json = JSON.new()
-			var content = file.get_as_text()
-			file.close()
-			
-			if json.parse(content) == OK:
-				var user_templates = json.get_data()
-				if user_templates is Dictionary:
-					templates.merge(user_templates, true)
-					debug_print("✓ Loaded ", user_templates.size(), " templates from ", user_config_path)
+	if use_default_templates:
+		templates = load_json_file(config_path)
+		debug_print("✓ Loaded ", templates.size(), " templates from ", config_path)
 	
+	var user_templates = load_json_file(user_config_path)
+	debug_print("✓ Loaded ", user_templates.size(), " templates from ", user_config_path)
+	templates.merge(user_templates, true)
+		
 	update_code_completion_cache()
 
 func update_code_completion_cache():
@@ -568,24 +552,41 @@ func debug_print(a1 = "", a2 = "", a3 = "", a4 = "", a5 = "") -> void:
 		print("[Code_Templates_plugin] ", a1, a2, a3, a4, a5)
 		
 func load_settings():
-	if FileAccess.file_exists(settings_path):
-		var file = FileAccess.open(settings_path, FileAccess.READ)
-		if file:
-			var json = JSON.new()
-			var content = file.get_as_text()
-			file.close()
-			if json.parse(content) == OK:
-				var settings = json.get_data()
-				if settings is Dictionary and "use_default_templates" in settings:
-					use_default_templates = settings.use_default_templates
-					print("✓ Settings loaded: use_default_templates = ", use_default_templates)
+	var settings = load_json_file(settings_path)
+	if settings.has("use_default_templates"):
+		use_default_templates = settings.use_default_templates
+		debug_print("✓ Settings loaded: use_default_templates = ", use_default_templates)
 
 func save_settings():
 	var settings = {
 		"use_default_templates": use_default_templates
 	}
-	var file = FileAccess.open(settings_path, FileAccess.WRITE)
+	if save_json_file(settings_path, settings):
+		debug_print("✓ Settings saved")
+	else:
+		debug_print("✓ Settings not saved")
+		
+func load_json_file(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	
+	var file = FileAccess.open(path, FileAccess.READ)
+	if not file:
+		return {}
+	
+	var json = JSON.new()
+	var content = file.get_as_text()
+	file.close()
+	
+	if json.parse(content) == OK:
+		return json.get_data()
+	
+	return {}
+
+func save_json_file(path: String, data: Dictionary) -> bool:
+	var file = FileAccess.open(path, FileAccess.WRITE)
 	if file:
-		file.store_string(JSON.stringify(settings, "\t"))
+		file.store_string(JSON.stringify(data, "\t"))
 		file.close()
-		print("✓ Settings saved")
+		return true
+	return false
