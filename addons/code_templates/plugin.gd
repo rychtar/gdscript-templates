@@ -14,10 +14,11 @@ var use_default_templates: bool = true
 var code_completion_prefixes: PackedStringArray = []
 
 func _enter_tree():
+	# load data and prepare cache
 	load_settings()
 	load_templates()
 	update_code_completion_cache()
-		
+	
 	# Add plugin to the menu
 	add_tool_menu_item("Code Templates Settings", _open_settings)
 	
@@ -367,9 +368,6 @@ func expand_template(template: String, params: Array) -> String:
 		var placeholder = "{" + str(i) + "}"
 		result = result.replace(placeholder, params[i])
 	
-	# remove cursor mark
-	result = result.replace("|CURSOR|", "")
-	
 	return result
 
 func apply_indentation(text: String, base_indent: String) -> String:
@@ -390,27 +388,34 @@ func apply_indentation(text: String, base_indent: String) -> String:
 
 func position_cursor_with_indent(text_edit: TextEdit, original_template: String, expanded: String, start_line: int, start_col: int, base_indent: String):
 	var cursor_marker = "|CURSOR|"
-	var cursor_pos = original_template.find(cursor_marker)
 	
-	if cursor_pos == -1:
-		return
+	var line_idx = start_line
+	var found = false
+	var marker_line = -1
+	var marker_col = -1
 	
-	# count rows before cursor
-	var before_cursor = original_template.substr(0, cursor_pos)
-	var lines = before_cursor.split("\n")
+	# Find cursor
+	for i in range(20):  # Max 20 řádků
+		var line = text_edit.get_line(line_idx + i)
+		var pos = line.find(cursor_marker)
+		if pos != -1:
+			marker_line = line_idx + i
+			marker_col = pos
+			found = true
+			break
 	
-	var target_line = start_line + lines.size() - 1
-	var target_col = 0
-	
-	if lines.size() == 1:
-		# cursor is on line 1
-		target_col = start_col + cursor_pos
-	else:
-		# cursor is on next line - adding indent
-		target_col = base_indent.length() + lines[-1].length()
-	
-	text_edit.set_caret_line(target_line)
-	text_edit.set_caret_column(target_col)
+	if found:
+		# delete marker
+		text_edit.select(marker_line, marker_col, marker_line, marker_col + cursor_marker.length())
+		text_edit.delete_selection()
+		
+		# setting up caret position
+		text_edit.set_caret_line(marker_line)
+		text_edit.set_caret_column(marker_col)
+		
+		# cancel autocompleting
+		await get_tree().process_frame
+		text_edit.cancel_code_completion()
 
 func load_templates():
 	templates.clear()
