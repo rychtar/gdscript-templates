@@ -1,6 +1,8 @@
 @tool
 extends EditorPlugin
 
+const DEBUG_MODE = true
+
 var templates: Dictionary = {}
 var config_path: String = "res://addons/code_templates/templates.json"
 var user_config_path: String = "user://code_templates.json"
@@ -21,9 +23,9 @@ func _enter_tree():
 	event.keycode = KEY_E
 	shortcut.events = [event]
 	
-	print("✓ Code Templates Plugin activated")
-	print("  Ctrl+E = Complete code from template")
-	print("  Ctrl+Space = Show available templates")
+	debug_print("✓ Code Templates Plugin activated")
+	debug_print("  Ctrl+E = Complete code from template")
+	debug_print("  Ctrl+Space = Show available templates")
 
 func _exit_tree():
 	remove_tool_menu_item("Code Templates Settings")
@@ -39,9 +41,9 @@ func _input(event: InputEvent):
 
 func _on_expand_pressed():
 	if try_expand_template():
-		print("✓ Template Completed!")
+		debug_print("✓ Template Completed!")
 	else:
-		print("✗ No template found.")
+		debug_print("✗ No template found.")
 
 func _show_code_completion():
 	var text_edit = get_current_script_editor()
@@ -177,21 +179,14 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 		preview_text.text = template_text
 	)
 	
-	# Signal - click and enter
+	# Signal and enter
 	item_list.item_activated.connect(func(index):
 		var selected = matches[index]
 		_insert_completion(text_edit, partial, selected.keyword)
 		window.queue_free()
 	)
 	
-	# doubleclick
-	item_list.item_clicked.connect(func(index, _at_position, mouse_button_index):
-		if mouse_button_index == MOUSE_BUTTON_LEFT:
-			var selected = matches[index]
-			_insert_completion(text_edit, partial, selected.keyword)
-			window.queue_free()
-	)
-	
+		
 	window.add_child(margin)
 	get_editor_interface().get_base_control().add_child(window)
 	
@@ -235,10 +230,18 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	# close when focus is lost
 	window.close_requested.connect(func(): window.queue_free())
 	
-	# close on ESC
+	# other item_list inputs
 	item_list.gui_input.connect(func(event):
-		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-			window.queue_free()
+		if event is InputEventKey and event.pressed:
+			if event.keycode == KEY_ESCAPE:
+				window.queue_free()
+			elif event.keycode == KEY_TAB:
+				var selected_items = item_list.get_selected_items()
+				if selected_items.size() > 0:
+					var index = selected_items[0]
+					var selected = matches[index]
+					_insert_completion(text_edit, partial, selected.keyword)
+					window.queue_free()
 	)
 
 func _extract_params_from_template(template: String) -> Array:
@@ -286,7 +289,7 @@ func _find_text_edit(node: Node) -> TextEdit:
 func try_expand_template() -> bool:
 	var text_edit = get_current_script_editor()
 	if not text_edit:
-		print("✗ Text Editor not found")
+		debug_print("✗ Text Editor not found")
 		return false
 	
 	var line_idx = text_edit.get_caret_line()
@@ -415,12 +418,12 @@ func load_templates():
 			
 			if json.parse(content) == OK:
 				templates = json.get_data()
-				print("✓ Loaded ", templates.size(), " templates from ", config_path)
+				debug_print("✓ Loaded ", templates.size(), " templates from ", config_path)
 			else:
-				print("✗ Error during parsing ", config_path)
+				debug_print("✗ Error during parsing ", config_path)
 				_load_default_templates()
 	else:
-		print("✗ File ", config_path, " does not exist, creating default...")
+		debug_print("✗ File ", config_path, " does not exist, creating default...")
 		_load_default_templates()
 		save_default_templates()
 	
@@ -436,7 +439,7 @@ func load_templates():
 				var user_templates = json.get_data()
 				if user_templates is Dictionary:
 					templates.merge(user_templates, true)
-					print("✓ Loaded ", user_templates.size(), " templates from ", user_config_path)
+					debug_print("✓ Loaded ", user_templates.size(), " templates from ", user_config_path)
 	
 	update_code_completion_cache()
 
@@ -448,7 +451,7 @@ func update_code_completion_cache():
 func _load_default_templates():
 	# Default templates
 	templates = {
-		"prnt": 'print("|CURSOR|")',
+		"prnt": 'debug_print("|CURSOR|")',
 		"fori": "for i in range({0}):\n\t|CURSOR|",
 		"fore": "for {0} in {1}:\n\t|CURSOR|",
 		"ifn": "if {0} != null:\n\t|CURSOR|",
@@ -476,7 +479,7 @@ func save_default_templates():
 	if file:
 		file.store_string(JSON.stringify(templates, "\t"))
 		file.close()
-		print("✓ Default templates saved in ", config_path)
+		debug_print("✓ Default templates saved in ", config_path)
 
 func save_templates():
 	# Save do user templates
@@ -484,7 +487,7 @@ func save_templates():
 	if file:
 		file.store_string(JSON.stringify(templates, "\t"))
 		file.close()
-		print("✓ User Templates saved in ", user_config_path)
+		debug_print("✓ User Templates saved in ", user_config_path)
 
 func _open_settings():
 	var dialog = AcceptDialog.new()
@@ -504,7 +507,18 @@ func _open_settings():
 	vbox.add_child(label)
 	
 	var text_edit = TextEdit.new()
-	text_edit.text = JSON.stringify(templates, "\t")
+	
+	var user_templates_only = {}
+	if FileAccess.file_exists(user_config_path):
+		var file = FileAccess.open(user_config_path, FileAccess.READ)
+		if file:
+			var json = JSON.new()
+			var content = file.get_as_text()
+			file.close()
+			if json.parse(content) == OK:
+				user_templates_only = json.get_data()	
+	
+	text_edit.text = JSON.stringify(user_templates_only, "\t")
 	text_edit.custom_minimum_size = Vector2(800, 800)
 	vbox.add_child(text_edit)
 	
@@ -516,15 +530,19 @@ func _open_settings():
 	save_button.pressed.connect(func():
 		var json = JSON.new()
 		if json.parse(text_edit.text) == OK:
-			var new_templates = json.get_data()
-			if new_templates is Dictionary:
-				templates = new_templates
-				save_templates()
+			var new_user_templates = json.get_data()
+			if new_user_templates is Dictionary:
+				var file = FileAccess.open(user_config_path, FileAccess.WRITE)
+				if file:
+					file.store_string(JSON.stringify(new_user_templates, "\t"))
+					file.close()
+				
+				load_templates()
 				update_code_completion_cache()
 				dialog.hide()
-				print("✓ Templates saved!")
+				debug_print("✓ User Templates saved!")
 		else:
-			print("✗ Error in JSON format!")
+			debug_print("✗ Error in JSON format!")
 	)
 	
 	button_box.add_child(save_button)
@@ -534,3 +552,7 @@ func _open_settings():
 	dialog.add_child(margin)
 	
 	get_editor_interface().popup_dialog_centered(dialog)
+	
+func debug_print(a1 = "", a2 = "", a3 = "", a4 = "", a5 = "") -> void:
+	if DEBUG_MODE:
+		print("[Code_Templates_plugin] ", a1, a2, a3, a4, a5)
