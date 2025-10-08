@@ -253,12 +253,12 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 func _extract_params_from_template(template: String) -> Array:
 	var params = []
 	var regex = RegEx.new()
-	regex.compile("\\{(\\d+)\\}")
+	regex.compile("\\{([^}]+)\\}") 
 	
 	for result in regex.search_all(template):
-		var param_num = int(result.get_string(1))
-		while params.size() <= param_num:
-			params.append("{" + str(params.size()) + "}")
+		var param_name = result.get_string(1) 
+		if param_name != "CURSOR":
+			params.append("{" + param_name + "}")
 	
 	return params
 
@@ -363,10 +363,15 @@ func try_expand_template() -> bool:
 func expand_template(template: String, params: Array) -> String:
 	var result = template
 	
-	# put parameters
-	for i in range(params.size()):
-		var placeholder = "{" + str(i) + "}"
-		result = result.replace(placeholder, params[i])
+	var regex = RegEx.new()
+	regex.compile("\\{([^}]+)\\}")
+	
+	var matches = regex.search_all(template)
+	
+	# replace parameters
+	for i in range(min(params.size(), matches.size())):
+		var placeholder = matches[i].get_string(0) 
+		result = result.replace(placeholder, params[i])	
 	
 	return result
 
