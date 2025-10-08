@@ -1,0 +1,22 @@
+{
+	"class": "class_name {0}\nextends {1}\n\n|CURSOR|",
+	"const": "const {0}: {1} = {2}|CURSOR|",
+	"elif": "elif {0}:\n\t|CURSOR|",
+	"else": "else:\n\t|CURSOR|",
+	"export": "@export var {0}: {1}",
+	"fore": "for {0} in {1}:\n\t|CURSOR|",
+	"fori": "for i in range({0}):\n\t|CURSOR|",
+	"func": "func {0}():\n\t|CURSOR|",
+	"funcr": "func {0}() -> {1}:\n\t|CURSOR|\n\treturn",
+	"ife": "if {0} == {1}:\n\t|CURSOR|",
+	"ifn": "if {0} != null:\n\t|CURSOR|",
+	"input": "func _input(event):\n\t|CURSOR|",
+	"match": "match {0}:\n\t{1}:\n\t\t|CURSOR|",
+	"onready": "@onready var {0} = ${1}",
+	"physics": "func _physics_process(delta):\n\t|CURSOR|",
+	"prnt": "print(\"|CURSOR|\")",
+	"process": "func _process(delta):\n\t|CURSOR|",
+	"ready": "func _ready():\n\t|CURSOR|",
+	"signal": "signal {0}",
+	"var": "var {0}: {1} = {2}|CURSOR|"
+}
