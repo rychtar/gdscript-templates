@@ -3,12 +3,14 @@ extends EditorPlugin
 
 const DEBUG_MODE = true
 
-var templates: Dictionary = {}
+# paths
 var config_path: String = "res://addons/code_templates/templates.json"
 var user_config_path: String = "user://code_templates.json"
-
 var settings_path: String = "user://code_templates_settings.json"
+
+# templates
 var use_default_templates: bool = true
+var templates: Dictionary = {}
 
 var code_completion_prefixes: PackedStringArray = []
 
@@ -18,9 +20,10 @@ func _enter_tree():
 	load_templates()
 	update_code_completion_cache()
 	
-	# Add plugin to the menu
+	# add plugin to the menu
 	add_tool_menu_item("Code Templates Settings", _open_settings)
-		
+	
+	# logs
 	debug_print("✓ Code Templates Plugin activated")
 	debug_print("  Ctrl+E = Complete code from template")
 	debug_print("  Ctrl+Space = Show available templates")
@@ -47,6 +50,10 @@ func _show_code_completion():
 	var text_edit = get_current_script_editor()
 	if not text_edit:
 		return
+		
+	# cancel current code completition	
+	text_edit.cancel_code_completion()
+	await get_tree().process_frame
 	
 	var line_idx = text_edit.get_caret_line()
 	var col = text_edit.get_caret_column()
@@ -261,24 +268,31 @@ func _insert_completion(text_edit: TextEdit, partial: String, keyword: String):
 	# find start
 	var start_col = col - partial.length()
 	
-	# change for keyword
-	text_edit.select(line_idx, start_col, line_idx, col)
-	text_edit.insert_text_at_caret(keyword + " ")
-	
+	var has_params = false
 	if keyword in templates:
 		var template = templates[keyword]
 		var params = _extract_params_from_template(template)
+		has_params = params.size() > 0
+	
+	if has_params:
+		# template has params
+		text_edit.select(line_idx, start_col, line_idx, col)
+		text_edit.insert_text_at_caret(keyword + " ")
 		
-		if params.size() > 0:
-			# create hint
-			var hint_text ="Params: " + " ".join(params)
-			
-			# editor set hint
+		# show hints
+		if keyword in templates:
+			var template = templates[keyword]
+			var params = _extract_params_from_template(template)
+			var hint_text = " ".join(params)
 			await get_tree().process_frame
 			text_edit.set_code_hint(hint_text)
-			
-	await get_tree().process_frame
-	text_edit.cancel_code_completion()
+	else:
+		# template is paramless expand it
+		text_edit.select(line_idx, start_col, line_idx, col)
+		text_edit.insert_text_at_caret(keyword)
+		
+		# Expand template
+		try_expand_template()
 
 func get_current_script_editor() -> TextEdit:
 	var script_editor = get_editor_interface().get_script_editor()
@@ -484,35 +498,32 @@ func save_templates():
 		debug_print("✓ User Templates saved in ", user_config_path)
 
 func _open_settings():
+	
+	# dialog definition
 	var dialog = AcceptDialog.new()
 	dialog.title = "Code Templates Settings"
 	dialog.initial_position = Window.WINDOW_INITIAL_POSITION_CENTER_MAIN_WINDOW_SCREEN
 	
-	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_bottom", 10)
+	dialog.ok_button_text = "Close"
+	dialog.add_button("Save", false, "save")
 	
-	var vbox = VBoxContainer.new()
+	# content definition
 	
+	var vbox = VBoxContainer.new()	
 	var label = Label.new()
 	label.text = "Adjust templates in JSON format:\nUsage: {0}, {1} for params, |CURSOR| cursor position after code completition"
 	vbox.add_child(label)
 	
-	var settings_box = HBoxContainer.new()
 	var use_defaults_checkbox = CheckBox.new()
 	use_defaults_checkbox.text = "Use default templates"
 	use_defaults_checkbox.button_pressed = use_default_templates
-	settings_box.add_child(use_defaults_checkbox)
-	vbox.add_child(settings_box)
-	
-	var separator = HSeparator.new()
-	vbox.add_child(separator)
-	
+	vbox.add_child(use_defaults_checkbox)
+		
 	var text_edit = TextEdit.new()
-	
+		
 	var user_templates_only = {}
+	
+	# TODO: create func
 	if FileAccess.file_exists(user_config_path):
 		var file = FileAccess.open(user_config_path, FileAccess.READ)
 		if file:
@@ -525,38 +536,30 @@ func _open_settings():
 	text_edit.text = JSON.stringify(user_templates_only, "\t")
 	text_edit.custom_minimum_size = Vector2(800, 800)
 	vbox.add_child(text_edit)
-	
-	var button_box = HBoxContainer.new()
-	button_box.alignment = BoxContainer.ALIGNMENT_END
-	
-	var save_button = Button.new()
-	save_button.text = "Save"
-	save_button.pressed.connect(func():
-		use_default_templates = use_defaults_checkbox.button_pressed
-		save_settings()
 		
-		var json = JSON.new()
-		if json.parse(text_edit.text) == OK:
-			var new_user_templates = json.get_data()
-			if new_user_templates is Dictionary:
-				var file = FileAccess.open(user_config_path, FileAccess.WRITE)
-				if file:
-					file.store_string(JSON.stringify(new_user_templates, "\t"))
-					file.close()
-				
-				load_templates()
-				update_code_completion_cache()
-				dialog.hide()
-				debug_print("✓ User Templates saved!")
-		else:
-			debug_print("✗ Error in JSON format!")
+	dialog.custom_action.connect(func(action):
+		if action == "save":
+			use_default_templates = use_defaults_checkbox.button_pressed
+			save_settings()
+			
+			var json = JSON.new()
+			if json.parse(text_edit.text) == OK:
+				var new_user_templates = json.get_data()
+				if new_user_templates is Dictionary:
+					var file = FileAccess.open(user_config_path, FileAccess.WRITE)
+					if file:
+						file.store_string(JSON.stringify(new_user_templates, "\t"))
+						file.close()
+					
+					load_templates()
+					update_code_completion_cache()
+					dialog.hide()
+					debug_print("✓ User Templates saved!")
+			else:
+				print("✗ Error in JSON format!")
 	)
-	
-	button_box.add_child(save_button)
-	vbox.add_child(button_box)
-	
-	margin.add_child(vbox)
-	dialog.add_child(margin)
+
+	dialog.add_child(vbox)
 	
 	get_editor_interface().popup_dialog_centered(dialog)
 	
