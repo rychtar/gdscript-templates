@@ -87,14 +87,14 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	# create window
 	var window = Window.new()
 	window.title = "Code Templates"
-	var base_width = int(800 * size_multiplier)
+	var base_width = int(1200 * size_multiplier)  # Wider for preview panel
 	var base_height = int(min(matches.size() * 60 + 80, 800) * size_multiplier)
 	window.size = Vector2i(base_width, base_height)
-	window.min_size = Vector2i(int(700 * size_multiplier), int(400 * size_multiplier))
+	window.min_size = Vector2i(int(1000 * size_multiplier), int(400 * size_multiplier))
 	window.unresizable = false
 	window.wrap_controls = true
 	
-	# ItemList
+	# Main container with margin
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var margin_size = int(15 * size_multiplier)
@@ -103,13 +103,26 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	margin.add_theme_constant_override("margin_top", margin_size)
 	margin.add_theme_constant_override("margin_bottom", margin_size)
 	
+	# HSplitContainer for list and preview
+	var hsplit = HSplitContainer.new()
+	hsplit.set_anchors_preset(Control.PRESET_FULL_RECT)
+	
+	# Left side - ItemList
+	var item_panel = PanelContainer.new()
+	var item_vbox = VBoxContainer.new()
+	
+	var item_label = Label.new()
+	item_label.text = "Templates"
+	item_label.add_theme_font_size_override("font_size", int(20 * size_multiplier))
+	item_vbox.add_child(item_label)
+		
 	var item_list = ItemList.new()
-	item_list.set_anchors_preset(Control.PRESET_FULL_RECT)
+	item_list.custom_minimum_size = Vector2i(int(400 * size_multiplier), 0)
 	var font_size = int(24 * size_multiplier)
 	item_list.add_theme_font_size_override("font_size", font_size)
 	item_list.fixed_icon_size = Vector2i(0, 0)
 	item_list.allow_reselect = true
-	item_list.auto_height = true
+	item_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	
 	for i in range(matches.size()):
 		item_list.add_item(matches[i].display)
@@ -117,8 +130,52 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	# Select first item
 	if matches.size() > 0:
 		item_list.select(0)
+		
+		
+	item_vbox.add_child(item_list)	
+	item_panel.add_child(item_vbox)
 	
-	margin.add_child(item_list)
+	# Right side - Preview panel
+	var preview_panel = PanelContainer.new()
+	preview_panel.focus_mode = Control.FOCUS_NONE
+	
+	var preview_vbox = VBoxContainer.new()
+	preview_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	
+	var preview_label = Label.new()
+	preview_label.text = "Preview"
+	preview_label.add_theme_font_size_override("font_size", int(20 * size_multiplier))
+	preview_vbox.add_child(preview_label)
+	
+	var preview_text = TextEdit.new()
+	preview_text.editable = false
+	preview_text.wrap_mode = TextEdit.LINE_WRAPPING_NONE
+	preview_text.add_theme_font_size_override("font_size", int(24 * size_multiplier))
+	preview_text.custom_minimum_size = Vector2i(int(500 * size_multiplier), 0)
+	preview_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	preview_text.focus_mode = Control.FOCUS_NONE
+	preview_text.context_menu_enabled = false	
+	
+	# Show first template
+	if matches.size() > 0:
+		var first_template = templates[matches[0].keyword]
+		preview_text.text = first_template
+	
+	preview_vbox.add_child(preview_text)	
+	preview_panel.add_child(preview_vbox)
+	
+	# Add to split container
+	hsplit.add_child(item_panel)
+	hsplit.add_child(preview_panel)
+	
+	margin.add_child(hsplit)
+	
+	# Update preview when selection changes
+	item_list.item_selected.connect(func(index):
+		var selected = matches[index]
+		var template_text = templates[selected.keyword]
+		preview_text.text = template_text
+	)
 	
 	# Signal - click and enter
 	item_list.item_activated.connect(func(index):
@@ -448,7 +505,7 @@ func _open_settings():
 	
 	var text_edit = TextEdit.new()
 	text_edit.text = JSON.stringify(templates, "\t")
-	text_edit.custom_minimum_size = Vector2(600, 400)
+	text_edit.custom_minimum_size = Vector2(800, 800)
 	vbox.add_child(text_edit)
 	
 	var button_box = HBoxContainer.new()
