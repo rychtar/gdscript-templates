@@ -6,7 +6,6 @@ const DEBUG_MODE = true
 var templates: Dictionary = {}
 var config_path: String = "res://addons/code_templates/templates.json"
 var user_config_path: String = "user://code_templates.json"
-var shortcut: Shortcut
 
 var settings_path: String = "user://code_templates_settings.json"
 var use_default_templates: bool = true
@@ -21,14 +20,7 @@ func _enter_tree():
 	
 	# Add plugin to the menu
 	add_tool_menu_item("Code Templates Settings", _open_settings)
-	
-	# Create shortcut
-	shortcut = Shortcut.new()
-	var event = InputEventKey.new()
-	event.ctrl_pressed = true
-	event.keycode = KEY_E
-	shortcut.events = [event]
-	
+		
 	debug_print("✓ Code Templates Plugin activated")
 	debug_print("  Ctrl+E = Complete code from template")
 	debug_print("  Ctrl+Space = Show available templates")
