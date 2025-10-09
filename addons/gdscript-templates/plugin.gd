@@ -30,15 +30,15 @@ func _enter_tree():
 	update_code_completion_cache()
 	
 	# add plugin to the menu
-	add_tool_menu_item("Code Templates Settings", _open_settings)
+	add_tool_menu_item("GDScript Templates Settings", _open_settings)
 	
 	# logs
-	Debug.info("✓ Code Templates Plugin activated")
+	Debug.info("✓ GDScript Templates Plugin activated")
 	Debug.info("  Ctrl+E = Complete code from template")
 	Debug.info("  Ctrl+Space = Show available templates")
 
 func _exit_tree():
-	remove_tool_menu_item("Code Templates Settings")
+	remove_tool_menu_item("GDScript Templates Settings")
 
 # TODO: custom shortcut in settings + auto detection?
 func _input(event: InputEvent):
@@ -106,7 +106,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	var popup = PopupPanel.new()
 	
 	# create window
-	popup.title = "Code Templates"
+	popup.title = "GDScript Templates"
 	var base_width = int(1200 * size_multiplier)
 	var base_height = int(min(matches.size() * 60 + 80, 800) * size_multiplier)
 	popup.size = Vector2i(base_width, base_height)
@@ -524,7 +524,7 @@ func _open_settings():
 	
 	# dialog definition
 	var dialog = AcceptDialog.new()
-	dialog.title = "Code Templates Settings"
+	dialog.title = "GDScript Templates Settings"
 	dialog.ok_button_text = "Close"
 	dialog.add_button("Save", false, "save")
 	
