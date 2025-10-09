@@ -1,0 +1,118 @@
+{
+	"class": "class_name {name}\nextends {parent}\n\n|CURSOR|",
+	"export": "@export var {name}: {type}|CURSOR|",
+	"exprange": "@export_range({min}, {max}) var {name}: {type} = |CURSOR|",
+	"expnode": "@export var {name}: {node_type} = |CURSOR|",
+	"expfile": "@export_file var {name}: String = \"|CURSOR|\"",
+	"onready": "@onready var {name}: {type} = ${path}|CURSOR|",
+	"onrget": "@onready var {name}: {type} = get_node(\"{path}\")|CURSOR|",
+	
+	"ready": "func _ready() -> void:\n\t|CURSOR|",
+	"process": "func _process(delta: float) -> void:\n\t|CURSOR|",
+	"physics": "func _physics_process(delta: float) -> void:\n\t|CURSOR|",
+	"input": "func _input(event: InputEvent) -> void:\n\t|CURSOR|",
+	"uninput": "func _unhandled_input(event: InputEvent) -> void:\n\t|CURSOR|",
+	"draw": "func _draw() -> void:\n\t|CURSOR|",
+	"enter": "func _enter_tree() -> void:\n\t|CURSOR|",
+	"exit": "func _exit_tree() -> void:\n\t|CURSOR|",
+	"notif": "func _notification(what: int) -> void:\n\tmatch what:\n\t\t|CURSOR|",
+	
+	"func": "func {name}({params}) -> {return_type}:\n\t|CURSOR|",
+	"fv": "func {name}() -> void:\n\t|CURSOR|",
+	"static": "static func {name}({params}) -> {return_type}:\n\t|CURSOR|",
+	
+	"signal": "signal {name}({params})|CURSOR|",
+	"sigcon": "{signal}.connect(_on_{signal})|CURSOR|",
+	"sigem": "{signal}.emit({args})|CURSOR|",
+	"ondis": "{signal}.disconnect(_on_{signal})|CURSOR|",
+	
+	"prop": "var {name}: {type}:\n\tget:\n\t\treturn {name}\n\tset(value):\n\t\t{name} = value\n\t\t|CURSOR|",
+	"propget": "var {name}: {type}:\n\tget:\n\t\treturn |CURSOR|",
+	"propset": "var {name}: {type}:\n\tset(value):\n\t\t|CURSOR|",
+	
+	"ife": "if {condition}:\n\t|CURSOR|\nelse:\n\t",
+	"for": "for {item} in {collection}:\n\t|CURSOR|",
+	"fori": "for i in range({count}):\n\t|CURSOR|",
+	"while": "while {condition}:\n\t|CURSOR|",
+	"match": "match {value}:\n\t{case}:\n\t\t|CURSOR|\n\t_:\n\t\tpass",
+	
+	"isnull": "if {value} != null:\n\t|CURSOR|",
+	"isval": "if is_instance_valid({object}):\n\t|CURSOR|",
+	"guard": "if not {condition}:\n\treturn|CURSOR|",
+	"assert": "assert({condition}, \"{message}\")|CURSOR|",
+	
+	"ia": "Input.is_action_pressed(\"{action}\")|CURSOR|",
+	"iaj": "Input.is_action_just_pressed(\"{action}\")|CURSOR|",
+	"iar": "Input.is_action_just_released(\"{action}\")|CURSOR|",
+	"iak": "Input.is_key_pressed(KEY_{key})|CURSOR|",
+	"ims": "Input.is_mouse_button_pressed(MOUSE_BUTTON_{button})|CURSOR|",
+	
+	"dict": "var {name}: Dictionary = {\n\t\"{key}\": |CURSOR|\n}",
+	"dictempty": "var {name}: Dictionary = {}|CURSOR|",
+	"dicthas": "if {dict}.has(\"{key}\"):\n\t|CURSOR|",
+	"dictget": "{dict}.get(\"{key}\", {default})|CURSOR|",
+	"dictkeys": "for key in {dict}.keys():\n\t|CURSOR|",
+	"dictvals": "for value in {dict}.values():\n\t|CURSOR|",
+	"dictitems": "for key in {dict}:\n\tvar value = {dict}[key]\n\t|CURSOR|",
+	"dictmerge": "{dict1}.merge({dict2}, true)|CURSOR|",
+	"dictdup": "var {new_dict} = {dict}.duplicate(true)|CURSOR|",
+	"dicterase": "{dict}.erase(\"{key}\")|CURSOR|",
+	"dictclear": "{dict}.clear()|CURSOR|",
+	
+	"addch": "add_child({node})|CURSOR|",
+	"remch": "remove_child({node})|CURSOR|",
+	"qfree": "queue_free()|CURSOR|",
+	"getnode": "get_node(\"{path}\")|CURSOR|",
+	"hasnode": "has_node(\"{path}\")|CURSOR|",
+	"findch": "find_child(\"{name}\", true, false)|CURSOR|",
+	"gettree": "get_tree()|CURSOR|",
+	"getparent": "get_parent()|CURSOR|",
+	"getchildren": "get_children()|CURSOR|",
+	
+	"inst": "var {var_name} = {scene}.instantiate()\n|CURSOR|",
+	"load": "var {var_name} = load(\"{path}\")|CURSOR|",
+	"preload": "const {const_name} = preload(\"{path}\")|CURSOR|",
+	
+	"timer": "await get_tree().create_timer({seconds}).timeout\n|CURSOR|",
+	"calldef": "call_deferred(\"{method}\", {args})|CURSOR|",
+	"setdef": "set_deferred(\"{property}\", {value})|CURSOR|",
+	
+	"tween": "var tween = create_tween()\ntween.tween_property({object}, \"{property}\", {final_value}, {duration})\n|CURSOR|",
+	"tweencb": "var tween = create_tween()\ntween.tween_callback({callable})\n|CURSOR|",
+	"tweenpar": "var tween = create_tween().set_parallel()\ntween.tween_property({object}, \"{prop1}\", {value1}, {duration1})\ntween.tween_property({object}, \"{prop2}\", {value2}, {duration2})\n|CURSOR|",
+	
+	"print": "print({value})|CURSOR|",
+	"printerr": "push_error({message})|CURSOR|",
+	"printwarn": "push_warning({message})|CURSOR|",
+	"printd": "print(\"{var}: \", {var})|CURSOR|",
+	
+	"todo": "# TODO: |CURSOR|",
+	"fixme": "# FIXME: |CURSOR|",
+	"note": "# NOTE: |CURSOR|",
+	
+	"region": "#region {name}\n|CURSOR|\n#endregion",
+	
+	"vec": "Vector2({x}, {y})|CURSOR|",
+	"vei": "Vector2i({x}, {y})|CURSOR|",
+	"vecz": "Vector2.ZERO|CURSOR|",
+	"veiz": "Vector2i.ZERO|CURSOR|",
+	"vec3": "Vector3({x}, {y}, {z})|CURSOR|",
+	"vec3z": "Vector3.ZERO|CURSOR|",
+	"color": "Color({r}, {g}, {b})|CURSOR|",
+	"rect2": "Rect2({x}, {y}, {width}, {height})|CURSOR|",
+	
+	"enum": "enum {name} {\n\t{value},\n\t|CURSOR|\n}",
+	"const": "const {name}: {type} = |CURSOR|",
+	"array": "var {name}: Array[{type}] = []|CURSOR|",
+	
+	"collbody": "func _on_body_entered(body: Node2D) -> void:\n\t|CURSOR|",
+	"collarea": "func _on_area_entered(area: Area2D) -> void:\n\t|CURSOR|",
+	"timeout": "func _on_timeout() -> void:\n\t|CURSOR|",
+	"pressed": "func _on_pressed() -> void:\n\t|CURSOR|",
+	
+	"randf": "randf_range({min}, {max})|CURSOR|",
+	"randi": "randi_range({min}, {max})|CURSOR|",
+	"clamp": "clamp({value}, {min}, {max})|CURSOR|",
+	"lerp": "lerp({from}, {to}, {weight})|CURSOR|",
+	"movetoward": "move_toward({from}, {to}, {delta})|CURSOR|"
+}

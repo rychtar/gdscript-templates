@@ -1,36 +1,52 @@
 @tool
 extends EditorPlugin
 
-var templates: Dictionary = {}
-var config_path: String = "res://addons/code_templates/templates.json"
+const Debug = preload("res://addons/gdscript-templates/plugin_debug.gd")
+
+# plugin related constants
+const CURSOR = "CURSOR"
+const CURSOR_MARKER = "|CURSOR|"
+
+#OS specific vars
+var is_macos = OS.get_name() == "macOS"
+
+# paths
+var config_path: String = "res://addons/gdscript-templates/templates.json"
 var user_config_path: String = "user://code_templates.json"
-var shortcut: Shortcut
+var settings_path: String = "user://code_templates_settings.json"
+
+# templates
+var use_default_templates: bool = true
+var templates: Dictionary = {}
+
 var code_completion_prefixes: PackedStringArray = []
+var awaiting_expand: bool = false 
 
 func _enter_tree():
+	
+	# load data and prepare cache
+	load_settings()
 	load_templates()
 	update_code_completion_cache()
-		
-	# Add plugin to the menu
-	add_tool_menu_item("Code Templates Settings", _open_settings)
 	
-	# Create shortcut
-	shortcut = Shortcut.new()
-	var event = InputEventKey.new()
-	event.ctrl_pressed = true
-	event.keycode = KEY_E
-	shortcut.events = [event]
+	# add plugin to the menu
+	add_tool_menu_item("GDScript Templates Settings", _open_settings)
 	
-	print("✓ Code Templates Plugin activated")
-	print("  Ctrl+E = Complete code from template")
-	print("  Ctrl+Space = Show available templates")
+	# logs
+	Debug.info("✓ GDScript Templates Plugin activated")
+	Debug.info("  Ctrl+E = Complete code from template")
+	Debug.info("  Ctrl+Space = Show available templates")
 
 func _exit_tree():
-	remove_tool_menu_item("Code Templates Settings")
+	remove_tool_menu_item("GDScript Templates Settings")
 
+# TODO: custom shortcut in settings + auto detection?
 func _input(event: InputEvent):
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.ctrl_pressed and event.keycode == KEY_E:
+			_on_expand_pressed()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_TAB and awaiting_expand:
 			_on_expand_pressed()
 			get_viewport().set_input_as_handled()
 		elif event.ctrl_pressed and event.keycode == KEY_SPACE:
@@ -39,14 +55,18 @@ func _input(event: InputEvent):
 
 func _on_expand_pressed():
 	if try_expand_template():
-		print("✓ Template Completed!")
+		Debug.info("✓ Template Completed!")
 	else:
-		print("✗ No template found.")
+		Debug.info("✗ No template found.")
 
 func _show_code_completion():
 	var text_edit = get_current_script_editor()
 	if not text_edit:
 		return
+		
+	# cancel current code completition	
+	text_edit.cancel_code_completion()
+	await get_tree().process_frame
 	
 	var line_idx = text_edit.get_caret_line()
 	var col = text_edit.get_caret_column()
@@ -80,42 +100,38 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	# sort by keyword
 	matches.sort_custom(func(a, b): return a.keyword < b.keyword)
 	
-	# setting macos retina specific adjustments
-	var is_macos = OS.get_name() == "macOS"
+	# setting macos retina specific adjustments	
 	var size_multiplier = 1.3 if is_macos else 1.0
 	
-	# create window
-	var window = Window.new()
-	window.title = "Code Templates"
-	var base_width = int(1200 * size_multiplier)  # Wider for preview panel
-	var base_height = int(min(matches.size() * 60 + 80, 800) * size_multiplier)
-	window.size = Vector2i(base_width, base_height)
-	window.min_size = Vector2i(int(1000 * size_multiplier), int(400 * size_multiplier))
-	window.unresizable = false
-	window.wrap_controls = true
+	var popup = PopupPanel.new()
 	
-	# Main container with margin
+	# create window
+	popup.title = "GDScript Templates"
+	var base_width = int(1200 * size_multiplier)
+	var base_height = int(min(matches.size() * 60 + 80, 800) * size_multiplier)
+	popup.size = Vector2i(base_width, base_height)
+	popup.min_size = Vector2i(int(1000 * size_multiplier), int(400 * size_multiplier))
+	popup.borderless = false  # Ukáže title bar
+	popup.unresizable = false  # Můžeš měnit velikost
+	popup.wrap_controls = true
+	
+	# Main container
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var margin_size = int(15 * size_multiplier)
-	margin.add_theme_constant_override("margin_left", margin_size)
-	margin.add_theme_constant_override("margin_right", margin_size)
-	margin.add_theme_constant_override("margin_top", margin_size)
-	margin.add_theme_constant_override("margin_bottom", margin_size)
 	
 	# HSplitContainer for list and preview
 	var hsplit = HSplitContainer.new()
 	hsplit.set_anchors_preset(Control.PRESET_FULL_RECT)
 	
-	# Left side - ItemList
-	var item_panel = PanelContainer.new()
+	# ItemList - Left side
+	#var item_panel = PanelContainer.new()
 	var item_vbox = VBoxContainer.new()
 	
 	var item_label = Label.new()
 	item_label.text = "Templates"
 	item_label.add_theme_font_size_override("font_size", int(20 * size_multiplier))
 	item_vbox.add_child(item_label)
-		
+
 	var item_list = ItemList.new()
 	item_list.custom_minimum_size = Vector2i(int(400 * size_multiplier), 0)
 	var font_size = int(24 * size_multiplier)
@@ -131,9 +147,8 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	if matches.size() > 0:
 		item_list.select(0)
 		
-		
 	item_vbox.add_child(item_list)	
-	item_panel.add_child(item_vbox)
+	#item_panel.add_child(item_vbox)
 	
 	# Right side - Preview panel
 	var preview_panel = PanelContainer.new()
@@ -160,12 +175,24 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	if matches.size() > 0:
 		var first_template = templates[matches[0].keyword]
 		preview_text.text = first_template
+		
+		var preview_display = first_template
+		var regex = RegEx.new()
+		regex.compile("\\{([^}]+)\\}")
+		
+		for match in regex.search_all(first_template):
+			var placeholder = match.get_string(0)
+			var param_name = match.get_string(1)
+			if param_name != "CURSOR":
+				preview_display = preview_display.replace(placeholder, param_name)
+	
+		preview_text.text = preview_display
 	
 	preview_vbox.add_child(preview_text)	
 	preview_panel.add_child(preview_vbox)
 	
 	# Add to split container
-	hsplit.add_child(item_panel)
+	hsplit.add_child(item_vbox)
 	hsplit.add_child(preview_panel)
 	
 	margin.add_child(hsplit)
@@ -174,26 +201,28 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	item_list.item_selected.connect(func(index):
 		var selected = matches[index]
 		var template_text = templates[selected.keyword]
-		preview_text.text = template_text
+		
+		var preview_display = template_text
+		var regex = RegEx.new()
+		regex.compile("\\{([^}]+)\\}")
+		
+		for match in regex.search_all(template_text):
+			var placeholder = match.get_string(0)  # {name}
+			var param_name = match.get_string(1)   # name
+			if param_name != "CURSOR": 
+				preview_display = preview_display.replace(placeholder, param_name)
+		
+		preview_text.text = preview_display
 	)
 	
-	# Signal - click and enter
+	# Signal and enter
 	item_list.item_activated.connect(func(index):
 		var selected = matches[index]
 		_insert_completion(text_edit, partial, selected.keyword)
-		window.queue_free()
-	)
-	
-	# doubleclick
-	item_list.item_clicked.connect(func(index, _at_position, mouse_button_index):
-		if mouse_button_index == MOUSE_BUTTON_LEFT:
-			var selected = matches[index]
-			_insert_completion(text_edit, partial, selected.keyword)
-			window.queue_free()
-	)
-	
-	window.add_child(margin)
-	get_editor_interface().get_base_control().add_child(window)
+		popup.queue_free()
+	)	
+		
+	popup.add_child(margin)
 	
 	# setting up window vs caret possition
 	var text_edit_global = text_edit.get_screen_position()
@@ -217,39 +246,48 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	
 	# Outside window placement fix
 	var screen_size = DisplayServer.screen_get_size()
-	if x_pos + window.size.x > screen_size.x:
-		x_pos = screen_size.x - window.size.x - 20 
-	if y_pos + window.size.y > screen_size.y:
-		y_pos = screen_size.y - window.size.y - 20
+	if x_pos + popup.size.x > screen_size.x:
+		x_pos = screen_size.x - popup.size.x - 20 
+	if y_pos + popup.size.y > screen_size.y:
+		y_pos = screen_size.y - popup.size.y - 20
 	
 	x_pos = max(20, x_pos)
 	y_pos = max(20, y_pos)
 	
-	window.position = Vector2i(x_pos, y_pos)
-	window.popup()
+	get_editor_interface().get_base_control().add_child(popup)
+	popup.position = Vector2i(x_pos, y_pos)  
+	popup.popup()
 	
 	# set focus for window
 	await get_tree().process_frame
 	item_list.grab_focus()
 	
 	# close when focus is lost
-	window.close_requested.connect(func(): window.queue_free())
+	popup.close_requested.connect(func(): popup.queue_free())
 	
-	# close on ESC
+	# other item_list inputs
 	item_list.gui_input.connect(func(event):
-		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-			window.queue_free()
+		if event is InputEventKey and event.pressed:
+			if event.keycode == KEY_ESCAPE:
+				popup.queue_free()
+			elif event.keycode == KEY_TAB:
+				var selected_items = item_list.get_selected_items()
+				if selected_items.size() > 0:
+					var index = selected_items[0]
+					var selected = matches[index]
+					_insert_completion(text_edit, partial, selected.keyword)
+					popup.queue_free()
 	)
 
 func _extract_params_from_template(template: String) -> Array:
 	var params = []
 	var regex = RegEx.new()
-	regex.compile("\\{(\\d+)\\}")
+	regex.compile("\\{([^}]+)\\}") 
 	
 	for result in regex.search_all(template):
-		var param_num = int(result.get_string(1))
-		while params.size() <= param_num:
-			params.append("{" + str(params.size()) + "}")
+		var param_name = result.get_string(1) 
+		if param_name != CURSOR:
+			params.append("{" + param_name + "}")
 	
 	return params
 
@@ -260,9 +298,33 @@ func _insert_completion(text_edit: TextEdit, partial: String, keyword: String):
 	# find start
 	var start_col = col - partial.length()
 	
-	# change for keyword
-	text_edit.select(line_idx, start_col, line_idx, col)
-	text_edit.insert_text_at_caret(keyword + " ")
+	var has_params = false
+	if keyword in templates:
+		var template = templates[keyword]
+		var params = _extract_params_from_template(template)
+		has_params = params.size() > 0
+	
+	if has_params:
+		# template has params
+		text_edit.select(line_idx, start_col, line_idx, col)
+		text_edit.insert_text_at_caret(keyword + " ")
+		
+		awaiting_expand = true
+		
+		# show hints
+		if keyword in templates:
+			var template = templates[keyword]
+			var params = _extract_params_from_template(template)
+			var hint_text = "Params: " + " ".join(params)
+			await get_tree().process_frame
+			text_edit.set_code_hint(hint_text)
+	else:
+		# template is paramless
+		text_edit.select(line_idx, start_col, line_idx, col)
+		text_edit.insert_text_at_caret(keyword)
+		
+		# Expand template
+		try_expand_template()
 
 func get_current_script_editor() -> TextEdit:
 	var script_editor = get_editor_interface().get_script_editor()
@@ -284,10 +346,14 @@ func _find_text_edit(node: Node) -> TextEdit:
 	return null
 
 func try_expand_template() -> bool:
+	awaiting_expand = false
 	var text_edit = get_current_script_editor()
 	if not text_edit:
-		print("✗ Text Editor not found")
+		Debug.warn("✗ Text Editor not found")
 		return false
+		
+	# hide hint
+	text_edit.set_code_hint("")
 	
 	var line_idx = text_edit.get_caret_line()
 	var col = text_edit.get_caret_column()
@@ -342,25 +408,35 @@ func try_expand_template() -> bool:
 			break
 	
 	# delete original text and place update template
+	text_edit.begin_complex_operation()
 	text_edit.select(line_idx, keyword_start, line_idx, col)
 	text_edit.delete_selection()
 	text_edit.insert_text_at_caret(expanded)
 	
 	# place cursor
 	position_cursor_with_indent(text_edit, template_text, expanded, line_idx, keyword_start, current_indent)
-	
+	text_edit.end_complex_operation()
 	return true
 
 func expand_template(template: String, params: Array) -> String:
 	var result = template
 	
-	# put parameters
-	for i in range(params.size()):
-		var placeholder = "{" + str(i) + "}"
-		result = result.replace(placeholder, params[i])
+	var regex = RegEx.new()
+	regex.compile("\\{([^}]+)\\}")
 	
-	# remove cursor mark
-	result = result.replace("|CURSOR|", "")
+	var matches = regex.search_all(template)
+	
+	# loop placeholders
+	for i in range(matches.size()):
+		var placeholder = matches[i].get_string(0)  
+		var param_name = matches[i].get_string(1)  
+		
+		if i < params.size():
+			# parameter provided - replace placeholder with value
+			result = result.replace(placeholder, params[i])
+		else:
+			# parameter not provided - keep its name
+			result = result.replace(placeholder, param_name)
 	
 	return result
 
@@ -381,63 +457,46 @@ func apply_indentation(text: String, base_indent: String) -> String:
 	return "\n".join(result)
 
 func position_cursor_with_indent(text_edit: TextEdit, original_template: String, expanded: String, start_line: int, start_col: int, base_indent: String):
-	var cursor_marker = "|CURSOR|"
-	var cursor_pos = original_template.find(cursor_marker)
 	
-	if cursor_pos == -1:
-		return
+	var line_idx = start_line
+	var found = false
+	var marker_line = -1
+	var marker_col = -1
 	
-	# count rows before cursor
-	var before_cursor = original_template.substr(0, cursor_pos)
-	var lines = before_cursor.split("\n")
+	# Find cursor
+	for i in range(20):  # Max 20 řádků
+		var line = text_edit.get_line(line_idx + i)
+		var pos = line.find(CURSOR_MARKER)
+		if pos != -1:
+			marker_line = line_idx + i
+			marker_col = pos
+			found = true
+			break
 	
-	var target_line = start_line + lines.size() - 1
-	var target_col = 0
-	
-	if lines.size() == 1:
-		# cursor is on line 1
-		target_col = start_col + cursor_pos
-	else:
-		# cursor is on next line - adding indent
-		target_col = base_indent.length() + lines[-1].length()
-	
-	text_edit.set_caret_line(target_line)
-	text_edit.set_caret_column(target_col)
+	if found:
+		# delete marker
+		text_edit.select(marker_line, marker_col, marker_line, marker_col + CURSOR_MARKER.length())
+		text_edit.delete_selection()
+		
+		# setting up caret position
+		text_edit.set_caret_line(marker_line)
+		text_edit.set_caret_column(marker_col)
+		
+		# cancel autocompleting
+		await get_tree().process_frame
+		text_edit.cancel_code_completion()
 
 func load_templates():
-	# Load base plugin templates
-	if FileAccess.file_exists(config_path):
-		var file = FileAccess.open(config_path, FileAccess.READ)
-		if file:
-			var json = JSON.new()
-			var content = file.get_as_text()
-			file.close()
-			
-			if json.parse(content) == OK:
-				templates = json.get_data()
-				print("✓ Loaded ", templates.size(), " templates from ", config_path)
-			else:
-				print("✗ Error during parsing ", config_path)
-				_load_default_templates()
-	else:
-		print("✗ File ", config_path, " does not exist, creating default...")
-		_load_default_templates()
-		save_default_templates()
+	templates.clear()
 	
-	# Load user created tempaltes
-	if FileAccess.file_exists(user_config_path):
-		var file = FileAccess.open(user_config_path, FileAccess.READ)
-		if file:
-			var json = JSON.new()
-			var content = file.get_as_text()
-			file.close()
-			
-			if json.parse(content) == OK:
-				var user_templates = json.get_data()
-				if user_templates is Dictionary:
-					templates.merge(user_templates, true)
-					print("✓ Loaded ", user_templates.size(), " templates from ", user_config_path)
+	if use_default_templates:
+		templates = load_json_file(config_path)
+		Debug.info("✓ Loaded %d templates from %s" % [templates.size(), config_path])
 	
+	var user_templates = load_json_file(user_config_path)
+	Debug.info("✓ Loaded %d User templates from %s" % [user_templates.size(), user_config_path])
+	templates.merge(user_templates, true)
+		
 	update_code_completion_cache()
 
 func update_code_completion_cache():
@@ -445,38 +504,13 @@ func update_code_completion_cache():
 	for keyword in templates.keys():
 		code_completion_prefixes.append(keyword)
 
-func _load_default_templates():
-	# Default templates
-	templates = {
-		"prnt": 'print("|CURSOR|")',
-		"fori": "for i in range({0}):\n\t|CURSOR|",
-		"fore": "for {0} in {1}:\n\t|CURSOR|",
-		"ifn": "if {0} != null:\n\t|CURSOR|",
-		"ife": "if {0} == {1}:\n\t|CURSOR|",
-		"elif": "elif {0}:\n\t|CURSOR|",
-		"else": "else:\n\t|CURSOR|",
-		"ready": "func _ready():\n\t|CURSOR|",
-		"process": "func _process(delta):\n\t|CURSOR|",
-		"physics": "func _physics_process(delta):\n\t|CURSOR|",
-		"input": "func _input(event):\n\t|CURSOR|",
-		"func": "func {0}():\n\t|CURSOR|",
-		"funcr": "func {0}() -> {1}:\n\t|CURSOR|\n\treturn",
-		"signal": "signal {0}",
-		"export": "@export var {0}: {1}",
-		"onready": "@onready var {0} = ${1}",
-		"match": "match {0}:\n\t{1}:\n\t\t|CURSOR|",
-		"class": "class_name {0}\nextends {1}\n\n|CURSOR|",
-		"var": "var {0}: {1} = {2}|CURSOR|",
-		"const": "const {0}: {1} = {2}|CURSOR|",
-	}
-
 func save_default_templates():
 	# Save default templates
 	var file = FileAccess.open(config_path, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(templates, "\t"))
 		file.close()
-		print("✓ Default templates saved in ", config_path)
+		Debug.info("✓ Default templates saved in %s" % config_path)
 
 func save_templates():
 	# Save do user templates
@@ -484,53 +518,121 @@ func save_templates():
 	if file:
 		file.store_string(JSON.stringify(templates, "\t"))
 		file.close()
-		print("✓ User Templates saved in ", user_config_path)
+		Debug.info("✓ User Templates saved in %s" % user_config_path)
 
 func _open_settings():
+	
+	# dialog definition
 	var dialog = AcceptDialog.new()
-	dialog.title = "Code Templates Settings"
-	dialog.initial_position = Window.WINDOW_INITIAL_POSITION_CENTER_MAIN_WINDOW_SCREEN
+	dialog.title = "GDScript Templates Settings"
+	dialog.ok_button_text = "Close"
+	dialog.add_button("Save", false, "save")
 	
-	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	
-	var vbox = VBoxContainer.new()
-	
+	# content definition	
+	var vbox = VBoxContainer.new()	
 	var label = Label.new()
-	label.text = "Adjust templates in JSON format:\nUsage: {0}, {1} for params, |CURSOR| cursor position after code completition"
+	
+	var hint_text = """
+	User Templates (append defaults)
+	
+	Format: "keyword": "template_code"
+	
+	Parameters:
+		  {name}, {type}, {value}  - Replaced by user input
+		  %s                       - Cursor position
+	
+	Examples:
+		  "myvar": "var {name}: {type} = {value}%s"
+		  Usage: myvar health int 100
+		  Result: var health: int = 100
+	
+	Tips:
+		  • Use \\n for new lines
+		  • Use \\t for tabs
+		  • Partial params: vec2 10 → Vector2(10, y)
+	
+	""" % [CURSOR_MARKER, CURSOR_MARKER]
+
+	label.text = "Adjust user templates in JSON format; by default, they are appended to the default templates."
 	vbox.add_child(label)
 	
+	var use_defaults_checkbox = CheckBox.new()
+	use_defaults_checkbox.text = "Use default templates"
+	use_defaults_checkbox.button_pressed = use_default_templates
+	use_defaults_checkbox.tooltip_text = "When enabled, default templates are combined with user templates.\nDisable to use only user templates."
+	vbox.add_child(use_defaults_checkbox)
+		
 	var text_edit = TextEdit.new()
-	text_edit.text = JSON.stringify(templates, "\t")
+	text_edit.tooltip_text = hint_text
+		
+	var user_templates_only = load_json_file(user_config_path)
+		
+	text_edit.text = JSON.stringify(user_templates_only, "\t")
 	text_edit.custom_minimum_size = Vector2(800, 800)
 	vbox.add_child(text_edit)
-	
-	var button_box = HBoxContainer.new()
-	button_box.alignment = BoxContainer.ALIGNMENT_END
-	
-	var save_button = Button.new()
-	save_button.text = "Save"
-	save_button.pressed.connect(func():
-		var json = JSON.new()
-		if json.parse(text_edit.text) == OK:
-			var new_templates = json.get_data()
-			if new_templates is Dictionary:
-				templates = new_templates
-				save_templates()
-				update_code_completion_cache()
-				dialog.hide()
-				print("✓ Templates saved!")
-		else:
-			print("✗ Error in JSON format!")
+		
+	dialog.custom_action.connect(func(action):
+		if action == "save":
+			use_default_templates = use_defaults_checkbox.button_pressed
+			save_settings()
+			
+			var json = JSON.new()
+			if json.parse(text_edit.text) == OK:
+				var new_user_templates = json.get_data()
+				if new_user_templates is Dictionary:
+					var file = FileAccess.open(user_config_path, FileAccess.WRITE)
+					if file:
+						file.store_string(JSON.stringify(new_user_templates, "\t"))
+						file.close()
+					
+					load_templates()
+					update_code_completion_cache()
+					dialog.hide()
+					Debug.info("✓ User Config saved!")
+			else:
+				Debug.info("✗ Error in JSON format!")
 	)
-	
-	button_box.add_child(save_button)
-	vbox.add_child(button_box)
-	
-	margin.add_child(vbox)
-	dialog.add_child(margin)
+
+	dialog.add_child(vbox)
 	
 	get_editor_interface().popup_dialog_centered(dialog)
+			
+func load_settings():
+	var settings = load_json_file(settings_path)
+	if settings.has("use_default_templates"):
+		use_default_templates = settings.use_default_templates
+		Debug.log("✓ Settings loaded: use_default_templates = %s" % use_default_templates)
+
+func save_settings():
+	var settings = {
+		"use_default_templates": use_default_templates
+	}
+	if save_json_file(settings_path, settings):
+		Debug.log("✓ Settings saved")
+	else:
+		Debug.log("✓ Settings not saved")
+		
+func load_json_file(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	
+	var file = FileAccess.open(path, FileAccess.READ)
+	if not file:
+		return {}
+	
+	var json = JSON.new()
+	var content = file.get_as_text()
+	file.close()
+	
+	if json.parse(content) == OK:
+		return json.get_data()
+	
+	return {}
+
+func save_json_file(path: String, data: Dictionary) -> bool:
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(data, "\t"))
+		file.close()
+		return true
+	return false
