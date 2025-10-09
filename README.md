@@ -6,7 +6,7 @@ A powerful code snippet expansion plugin for Godot 4.x that accelerates your wor
 
 - **Smart Template Expansion** - Type keywords and expand them into full code blocks
 - **Descriptive Parameters** - Use meaningful parameter names like `{name}`, `{type}` 
-- **Partial Parameter Support** - Fill only some parameters, rest become placeholders (e.g., `vec2 10` → `Vector2(10, y)`)
+- **Partial Parameter Support** - Fill only some parameters, rest become placeholders (e.g., `vec 10` → `Vector2(10, y)`)
 - **Interactive Preview Panel** - See template code before inserting
 - **Auto-completion Popup** - Browse available templates with Ctrl+Space
 - **Automatic Indentation** - Templates respect your current code indentation
@@ -29,7 +29,7 @@ A powerful code snippet expansion plugin for Godot 4.x that accelerates your wor
 ## 📦 Installation
 
 1. Download or clone this repository
-2. Copy the `addons/gdscript-template` folder into your Godot project's `addons/` directory
+2. Copy the `addons/gdscript-template` folder into your Godot project's directory
 3. Open your project in Godot
 4. Go to **Project → Project Settings → Plugins**
 5. Find "Code Templates" and set it to **Enable**
@@ -39,7 +39,7 @@ A powerful code snippet expansion plugin for Godot 4.x that accelerates your wor
 
 ### Basic Usage
 
-1. Type a template keyword (e.g., `prnt`, `func`, `vec2`)
+1. Type a template keyword (e.g., `fori`, `func`, `vec`)
 2. Press `Ctrl+E` to expand, or `Ctrl+Space` to browse templates
 3. Add parameters after the keyword: `printd health` → `print("health: ", health)`
 
@@ -67,5 +67,47 @@ Access settings via **Project → Tools → Code Templates Settings**
 {
   "keyword": "template code with {param1} and {param2}|CURSOR|"
 }
+```
+
+- Use `{descriptive_name}` for parameters
+- Use `|CURSOR|` to mark cursor position after expansion
+- Use `\n` for new lines, `\t` for tabs
+
+### Example Custom Template
+```json
+{
+  "myloop": "for {item} in {collection}:\n\tif {item}.{property}:\n\t\t|CURSOR|"
+}
+```
+
+## 📚 Built-in Templates
+
+The plugin includes 80+ templates for common Godot patterns:
+- Functions (`func`, `ready`, `process`, `input`)
+- Variables (`export`, `onready`, `const`)
+- Control flow (`if`, `for`, `while`, `match`)
+- Signals (`signal`, `sigcon`, `sigem`)
+- Nodes (`addch`, `getnode`, `inst`)
+- Math (`vec2`, `vec3`, `lerp`, `clamp`)
+- And many more...
+
+Press `Ctrl+Space` to browse all available templates!
+
+## 🔧 Requirements
+
+- Godot 4.0 or higher
+- GDScript support
+
+## 📝 License
+
+MIT License - Feel free to use and modify!
+
+## 🐛 Issues & Contributions
+
+Found a bug or have a feature request? Contributions are welcome!
+
+---
+
+**Happy Coding! 🚀**
 
 ## 📸 Screenshots
