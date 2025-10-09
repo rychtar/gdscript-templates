@@ -3,6 +3,10 @@ extends EditorPlugin
 
 const DEBUG_MODE = true
 
+# plugin related constants
+const CURSOR = "CURSOR"
+const CURSOR_MARKER = "|CURSOR|"
+
 #OS specific vars
 var is_macos = OS.get_name() == "macOS"
 
@@ -16,6 +20,7 @@ var use_default_templates: bool = true
 var templates: Dictionary = {}
 
 var code_completion_prefixes: PackedStringArray = []
+var awaiting_expand: bool = false 
 
 func _enter_tree():
 	# load data and prepare cache
@@ -38,6 +43,9 @@ func _exit_tree():
 func _input(event: InputEvent):
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.ctrl_pressed and event.keycode == KEY_E:
+			_on_expand_pressed()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_TAB and awaiting_expand:
 			_on_expand_pressed()
 			get_viewport().set_input_as_handled()
 		elif event.ctrl_pressed and event.keycode == KEY_SPACE:
@@ -94,38 +102,35 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	# setting macos retina specific adjustments	
 	var size_multiplier = 1.3 if is_macos else 1.0
 	
+	var popup = PopupPanel.new()
+	
 	# create window
-	var window = Window.new()
-	window.title = "Code Templates"
+	popup.title = "Code Templates"
 	var base_width = int(1200 * size_multiplier)
 	var base_height = int(min(matches.size() * 60 + 80, 800) * size_multiplier)
-	window.size = Vector2i(base_width, base_height)
-	window.min_size = Vector2i(int(1000 * size_multiplier), int(400 * size_multiplier))
-	window.unresizable = false
-	window.wrap_controls = true
+	popup.size = Vector2i(base_width, base_height)
+	popup.min_size = Vector2i(int(1000 * size_multiplier), int(400 * size_multiplier))
+	popup.borderless = false  # Ukáže title bar
+	popup.unresizable = false  # Můžeš měnit velikost
+	popup.wrap_controls = true
 	
-	# Main container with margin
+	# Main container
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var margin_size = int(15 * size_multiplier)
-	margin.add_theme_constant_override("margin_left", margin_size)
-	margin.add_theme_constant_override("margin_right", margin_size)
-	margin.add_theme_constant_override("margin_top", margin_size)
-	margin.add_theme_constant_override("margin_bottom", margin_size)
 	
 	# HSplitContainer for list and preview
 	var hsplit = HSplitContainer.new()
 	hsplit.set_anchors_preset(Control.PRESET_FULL_RECT)
 	
-	# Left side - ItemList
-	var item_panel = PanelContainer.new()
+	# ItemList - Left side
+	#var item_panel = PanelContainer.new()
 	var item_vbox = VBoxContainer.new()
 	
 	var item_label = Label.new()
 	item_label.text = "Templates"
 	item_label.add_theme_font_size_override("font_size", int(20 * size_multiplier))
 	item_vbox.add_child(item_label)
-		
+
 	var item_list = ItemList.new()
 	item_list.custom_minimum_size = Vector2i(int(400 * size_multiplier), 0)
 	var font_size = int(24 * size_multiplier)
@@ -141,9 +146,8 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	if matches.size() > 0:
 		item_list.select(0)
 		
-		
 	item_vbox.add_child(item_list)	
-	item_panel.add_child(item_vbox)
+	#item_panel.add_child(item_vbox)
 	
 	# Right side - Preview panel
 	var preview_panel = PanelContainer.new()
@@ -170,12 +174,24 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	if matches.size() > 0:
 		var first_template = templates[matches[0].keyword]
 		preview_text.text = first_template
+		
+		var preview_display = first_template
+		var regex = RegEx.new()
+		regex.compile("\\{([^}]+)\\}")
+		
+		for match in regex.search_all(first_template):
+			var placeholder = match.get_string(0)
+			var param_name = match.get_string(1)
+			if param_name != "CURSOR":
+				preview_display = preview_display.replace(placeholder, param_name)
+	
+		preview_text.text = preview_display
 	
 	preview_vbox.add_child(preview_text)	
 	preview_panel.add_child(preview_vbox)
 	
 	# Add to split container
-	hsplit.add_child(item_panel)
+	hsplit.add_child(item_vbox)
 	hsplit.add_child(preview_panel)
 	
 	margin.add_child(hsplit)
@@ -184,19 +200,30 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	item_list.item_selected.connect(func(index):
 		var selected = matches[index]
 		var template_text = templates[selected.keyword]
-		preview_text.text = template_text
+		
+		# PŘIDEJ - Odstraň {} ale nech názvy parametrů a |CURSOR|
+		var preview_display = template_text
+		var regex = RegEx.new()
+		regex.compile("\\{([^}]+)\\}")
+		
+		for match in regex.search_all(template_text):
+			var placeholder = match.get_string(0)  # {name}
+			var param_name = match.get_string(1)   # name
+			if param_name != "CURSOR":  # Nech |CURSOR| jak je
+				preview_display = preview_display.replace(placeholder, param_name)
+		
+		preview_text.text = preview_display
 	)
 	
 	# Signal and enter
 	item_list.item_activated.connect(func(index):
 		var selected = matches[index]
 		_insert_completion(text_edit, partial, selected.keyword)
-		window.queue_free()
-	)
-	
+		popup.queue_free()
+	)	
 		
-	window.add_child(margin)
-	get_editor_interface().get_base_control().add_child(window)
+	popup.add_child(margin)
+	#get_editor_interface().get_base_control().add_child(window)
 	
 	# setting up window vs caret possition
 	var text_edit_global = text_edit.get_screen_position()
@@ -220,36 +247,37 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	
 	# Outside window placement fix
 	var screen_size = DisplayServer.screen_get_size()
-	if x_pos + window.size.x > screen_size.x:
-		x_pos = screen_size.x - window.size.x - 20 
-	if y_pos + window.size.y > screen_size.y:
-		y_pos = screen_size.y - window.size.y - 20
+	if x_pos + popup.size.x > screen_size.x:
+		x_pos = screen_size.x - popup.size.x - 20 
+	if y_pos + popup.size.y > screen_size.y:
+		y_pos = screen_size.y - popup.size.y - 20
 	
 	x_pos = max(20, x_pos)
 	y_pos = max(20, y_pos)
 	
-	window.position = Vector2i(x_pos, y_pos)
-	window.popup()
+	get_editor_interface().get_base_control().add_child(popup)
+	popup.position = Vector2i(x_pos, y_pos)  
+	popup.popup()
 	
 	# set focus for window
 	await get_tree().process_frame
 	item_list.grab_focus()
 	
 	# close when focus is lost
-	window.close_requested.connect(func(): window.queue_free())
+	popup.close_requested.connect(func(): popup.queue_free())
 	
 	# other item_list inputs
 	item_list.gui_input.connect(func(event):
 		if event is InputEventKey and event.pressed:
 			if event.keycode == KEY_ESCAPE:
-				window.queue_free()
+				popup.queue_free()
 			elif event.keycode == KEY_TAB:
 				var selected_items = item_list.get_selected_items()
 				if selected_items.size() > 0:
 					var index = selected_items[0]
 					var selected = matches[index]
 					_insert_completion(text_edit, partial, selected.keyword)
-					window.queue_free()
+					popup.queue_free()
 	)
 
 func _extract_params_from_template(template: String) -> Array:
@@ -259,7 +287,7 @@ func _extract_params_from_template(template: String) -> Array:
 	
 	for result in regex.search_all(template):
 		var param_name = result.get_string(1) 
-		if param_name != "CURSOR":
+		if param_name != CURSOR:
 			params.append("{" + param_name + "}")
 	
 	return params
@@ -282,15 +310,17 @@ func _insert_completion(text_edit: TextEdit, partial: String, keyword: String):
 		text_edit.select(line_idx, start_col, line_idx, col)
 		text_edit.insert_text_at_caret(keyword + " ")
 		
+		awaiting_expand = true
+		
 		# show hints
 		if keyword in templates:
 			var template = templates[keyword]
 			var params = _extract_params_from_template(template)
-			var hint_text = " ".join(params)
+			var hint_text = "Params: " + " ".join(params)
 			await get_tree().process_frame
 			text_edit.set_code_hint(hint_text)
 	else:
-		# template is paramless expand it
+		# template is paramless
 		text_edit.select(line_idx, start_col, line_idx, col)
 		text_edit.insert_text_at_caret(keyword)
 		
@@ -317,6 +347,7 @@ func _find_text_edit(node: Node) -> TextEdit:
 	return null
 
 func try_expand_template() -> bool:
+	awaiting_expand = false
 	var text_edit = get_current_script_editor()
 	if not text_edit:
 		debug_print("✗ Text Editor not found")
@@ -424,7 +455,6 @@ func apply_indentation(text: String, base_indent: String) -> String:
 	return "\n".join(result)
 
 func position_cursor_with_indent(text_edit: TextEdit, original_template: String, expanded: String, start_line: int, start_col: int, base_indent: String):
-	var cursor_marker = "|CURSOR|"
 	
 	var line_idx = start_line
 	var found = false
@@ -434,7 +464,7 @@ func position_cursor_with_indent(text_edit: TextEdit, original_template: String,
 	# Find cursor
 	for i in range(20):  # Max 20 řádků
 		var line = text_edit.get_line(line_idx + i)
-		var pos = line.find(cursor_marker)
+		var pos = line.find(CURSOR_MARKER)
 		if pos != -1:
 			marker_line = line_idx + i
 			marker_col = pos
@@ -443,7 +473,7 @@ func position_cursor_with_indent(text_edit: TextEdit, original_template: String,
 	
 	if found:
 		# delete marker
-		text_edit.select(marker_line, marker_col, marker_line, marker_col + cursor_marker.length())
+		text_edit.select(marker_line, marker_col, marker_line, marker_col + CURSOR_MARKER.length())
 		text_edit.delete_selection()
 		
 		# setting up caret position
