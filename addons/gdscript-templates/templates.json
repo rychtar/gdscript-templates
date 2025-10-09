@@ -30,9 +30,7 @@
 	"propget": "var {name}: {type}:\n\tget:\n\t\treturn |CURSOR|",
 	"propset": "var {name}: {type}:\n\tset(value):\n\t\t|CURSOR|",
 	
-	"if": "if {condition}:\n\t|CURSOR|",
-	"ifel": "if {condition}:\n\t|CURSOR|\nelse:\n\t",
-	"elif": "elif {condition}:\n\t|CURSOR|",
+	"ife": "if {condition}:\n\t|CURSOR|\nelse:\n\t",
 	"for": "for {item} in {collection}:\n\t|CURSOR|",
 	"fori": "for i in range({count}):\n\t|CURSOR|",
 	"while": "while {condition}:\n\t|CURSOR|",
@@ -94,8 +92,10 @@
 	
 	"region": "#region {name}\n|CURSOR|\n#endregion",
 	
-	"vec2": "Vector2({x}, {y})|CURSOR|",
-	"vec2z": "Vector2.ZERO|CURSOR|",
+	"vec": "Vector2({x}, {y})|CURSOR|",
+	"vei": "Vector2i({x}, {y})|CURSOR|",
+	"vecz": "Vector2.ZERO|CURSOR|",
+	"veiz": "Vector2i.ZERO|CURSOR|",
 	"vec3": "Vector3({x}, {y}, {z})|CURSOR|",
 	"vec3z": "Vector3.ZERO|CURSOR|",
 	"color": "Color({r}, {g}, {b})|CURSOR|",
