@@ -12,8 +12,6 @@ A powerful code snippet expansion plugin for Godot 4.x that accelerates your wor
 - **Automatic Indentation** - Templates respect your current code indentation
 - **Cursor Positioning** - Automatically places cursor at the right spot using `|CURSOR|` marker
 - **User Templates** - Override or extend default templates with your own
-- **Platform Aware** - Optimized UI for both macOS Retina and Windows displays
-- **Case Insensitive** - Keywords work regardless of capitalization
 
 ## ⌨️ Keyboard Shortcuts
 
@@ -29,7 +27,7 @@ A powerful code snippet expansion plugin for Godot 4.x that accelerates your wor
 ## 📦 Installation
 
 1. Download or clone this repository
-2. Copy the `addons/gdscript-template` folder into your Godot project's directory
+2. Copy the `gdscript-template` folder into your Godot project's `addons` directory
 3. Open your project in Godot
 4. Go to **Project → Project Settings → Plugins**
 5. Find "Code Templates" and set it to **Enable**
@@ -96,7 +94,6 @@ Press `Ctrl+Space` to browse all available templates!
 ## 🔧 Requirements
 
 - Godot 4.0 or higher
-- GDScript support
 
 ## 📝 License
 
@@ -106,7 +103,6 @@ MIT License - Feel free to use and modify!
 
 Found a bug or have a feature request? Contributions are welcome!
 
----
 
 **Happy Coding! 🚀**
 
