@@ -505,18 +505,8 @@ func _open_settings():
 		
 	var text_edit = TextEdit.new()
 		
-	var user_templates_only = {}
-	
-	# TODO: create func
-	if FileAccess.file_exists(user_config_path):
-		var file = FileAccess.open(user_config_path, FileAccess.READ)
-		if file:
-			var json = JSON.new()
-			var content = file.get_as_text()
-			file.close()
-			if json.parse(content) == OK:
-				user_templates_only = json.get_data()	
-	
+	var user_templates_only = load_json_file(user_config_path)
+		
 	text_edit.text = JSON.stringify(user_templates_only, "\t")
 	text_edit.custom_minimum_size = Vector2(800, 800)
 	vbox.add_child(text_edit)
@@ -538,9 +528,9 @@ func _open_settings():
 					load_templates()
 					update_code_completion_cache()
 					dialog.hide()
-					debug_print("✓ User Templates saved!")
+					debug_print("✓ User Config saved!")
 			else:
-				print("✗ Error in JSON format!")
+				debug_print("✗ Error in JSON format!")
 	)
 
 	dialog.add_child(vbox)
