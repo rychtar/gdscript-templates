@@ -107,3 +107,10 @@ Found a bug or have a feature request? Contributions are welcome!
 **Happy Coding! 🚀**
 
 ## 📸 Screenshots
+
+![Keyword + Preview Window](https://github.com/rychtar/gdscript-templates/blob/main/addons/gdscript-templates/images/keyword.png?raw=true)
+
+![Completed code](https://github.com/rychtar/gdscript-templates/blob/main/addons/gdscript-templates/images/expanded.png?raw=true)
+
+![Default Templates](https://github.com/rychtar/gdscript-templates/blob/main/addons/gdscript-templates/images/templates.png?raw=true)
+
