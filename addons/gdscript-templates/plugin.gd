@@ -1,7 +1,7 @@
 @tool
 extends EditorPlugin
 
-const Debug = preload("res://addons/code_templates/plugin_debug.gd")
+const Debug = preload("res://addons/gdscript-templates/plugin_debug.gd")
 
 # plugin related constants
 const CURSOR = "CURSOR"
@@ -11,7 +11,7 @@ const CURSOR_MARKER = "|CURSOR|"
 var is_macos = OS.get_name() == "macOS"
 
 # paths
-var config_path: String = "res://addons/code_templates/templates.json"
+var config_path: String = "res://addons/gdscript-templates/templates.json"
 var user_config_path: String = "user://code_templates.json"
 var settings_path: String = "user://code_templates_settings.json"
 
