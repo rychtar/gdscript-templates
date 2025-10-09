@@ -1,7 +1,7 @@
 @tool
 extends EditorPlugin
 
-const DEBUG_MODE = true
+const Debug = preload("res://addons/code_templates/plugin_debug.gd")
 
 # plugin related constants
 const CURSOR = "CURSOR"
@@ -23,6 +23,7 @@ var code_completion_prefixes: PackedStringArray = []
 var awaiting_expand: bool = false 
 
 func _enter_tree():
+	
 	# load data and prepare cache
 	load_settings()
 	load_templates()
@@ -32,9 +33,9 @@ func _enter_tree():
 	add_tool_menu_item("Code Templates Settings", _open_settings)
 	
 	# logs
-	debug_print("✓ Code Templates Plugin activated")
-	debug_print("  Ctrl+E = Complete code from template")
-	debug_print("  Ctrl+Space = Show available templates")
+	Debug.info("✓ Code Templates Plugin activated")
+	Debug.info("  Ctrl+E = Complete code from template")
+	Debug.info("  Ctrl+Space = Show available templates")
 
 func _exit_tree():
 	remove_tool_menu_item("Code Templates Settings")
@@ -54,9 +55,9 @@ func _input(event: InputEvent):
 
 func _on_expand_pressed():
 	if try_expand_template():
-		debug_print("✓ Template Completed!")
+		Debug.info("✓ Template Completed!")
 	else:
-		debug_print("✗ No template found.")
+		Debug.info("✗ No template found.")
 
 func _show_code_completion():
 	var text_edit = get_current_script_editor()
@@ -201,7 +202,6 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 		var selected = matches[index]
 		var template_text = templates[selected.keyword]
 		
-		# PŘIDEJ - Odstraň {} ale nech názvy parametrů a |CURSOR|
 		var preview_display = template_text
 		var regex = RegEx.new()
 		regex.compile("\\{([^}]+)\\}")
@@ -209,7 +209,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 		for match in regex.search_all(template_text):
 			var placeholder = match.get_string(0)  # {name}
 			var param_name = match.get_string(1)   # name
-			if param_name != "CURSOR":  # Nech |CURSOR| jak je
+			if param_name != "CURSOR": 
 				preview_display = preview_display.replace(placeholder, param_name)
 		
 		preview_text.text = preview_display
@@ -223,7 +223,6 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	)	
 		
 	popup.add_child(margin)
-	#get_editor_interface().get_base_control().add_child(window)
 	
 	# setting up window vs caret possition
 	var text_edit_global = text_edit.get_screen_position()
@@ -350,8 +349,11 @@ func try_expand_template() -> bool:
 	awaiting_expand = false
 	var text_edit = get_current_script_editor()
 	if not text_edit:
-		debug_print("✗ Text Editor not found")
+		Debug.warn("✗ Text Editor not found")
 		return false
+		
+	# hide hint
+	text_edit.set_code_hint("")
 	
 	var line_idx = text_edit.get_caret_line()
 	var col = text_edit.get_caret_column()
@@ -489,10 +491,10 @@ func load_templates():
 	
 	if use_default_templates:
 		templates = load_json_file(config_path)
-		debug_print("✓ Loaded ", templates.size(), " templates from ", config_path)
+		Debug.info("✓ Loaded %d templates from %s" % [templates.size(), config_path])
 	
 	var user_templates = load_json_file(user_config_path)
-	debug_print("✓ Loaded ", user_templates.size(), " templates from ", user_config_path)
+	Debug.info("✓ Loaded %d User templates from %s" % [user_templates.size(), user_config_path])
 	templates.merge(user_templates, true)
 		
 	update_code_completion_cache()
@@ -508,7 +510,7 @@ func save_default_templates():
 	if file:
 		file.store_string(JSON.stringify(templates, "\t"))
 		file.close()
-		debug_print("✓ Default templates saved in ", config_path)
+		Debug.info("✓ Default templates saved in %s" % config_path)
 
 func save_templates():
 	# Save do user templates
@@ -516,31 +518,52 @@ func save_templates():
 	if file:
 		file.store_string(JSON.stringify(templates, "\t"))
 		file.close()
-		debug_print("✓ User Templates saved in ", user_config_path)
+		Debug.info("✓ User Templates saved in %s" % user_config_path)
 
 func _open_settings():
 	
 	# dialog definition
 	var dialog = AcceptDialog.new()
 	dialog.title = "Code Templates Settings"
-	dialog.initial_position = Window.WINDOW_INITIAL_POSITION_CENTER_MAIN_WINDOW_SCREEN
-	
 	dialog.ok_button_text = "Close"
 	dialog.add_button("Save", false, "save")
 	
-	# content definition
-	
+	# content definition	
 	var vbox = VBoxContainer.new()	
 	var label = Label.new()
-	label.text = "Adjust templates in JSON format:\nUsage: {0}, {1} for params, |CURSOR| cursor position after code completition"
+	
+	var hint_text = """
+	User Templates (append defaults)
+	
+	Format: "keyword": "template_code"
+	
+	Parameters:
+		  {name}, {type}, {value}  - Replaced by user input
+		  %s                       - Cursor position
+	
+	Examples:
+		  "myvar": "var {name}: {type} = {value}%s"
+		  Usage: myvar health int 100
+		  Result: var health: int = 100
+	
+	Tips:
+		  • Use \\n for new lines
+		  • Use \\t for tabs
+		  • Partial params: vec2 10 → Vector2(10, y)
+	
+	""" % [CURSOR_MARKER, CURSOR_MARKER]
+
+	label.text = "Adjust user templates in JSON format; by default, they are appended to the default templates."
 	vbox.add_child(label)
 	
 	var use_defaults_checkbox = CheckBox.new()
 	use_defaults_checkbox.text = "Use default templates"
 	use_defaults_checkbox.button_pressed = use_default_templates
+	use_defaults_checkbox.tooltip_text = "When enabled, default templates are combined with user templates.\nDisable to use only user templates."
 	vbox.add_child(use_defaults_checkbox)
 		
 	var text_edit = TextEdit.new()
+	text_edit.tooltip_text = hint_text
 		
 	var user_templates_only = load_json_file(user_config_path)
 		
@@ -565,33 +588,29 @@ func _open_settings():
 					load_templates()
 					update_code_completion_cache()
 					dialog.hide()
-					debug_print("✓ User Config saved!")
+					Debug.info("✓ User Config saved!")
 			else:
-				debug_print("✗ Error in JSON format!")
+				Debug.info("✗ Error in JSON format!")
 	)
 
 	dialog.add_child(vbox)
 	
 	get_editor_interface().popup_dialog_centered(dialog)
-	
-func debug_print(a1 = "", a2 = "", a3 = "", a4 = "", a5 = "") -> void:
-	if DEBUG_MODE:
-		print("[Code_Templates_plugin] ", a1, a2, a3, a4, a5)
-		
+			
 func load_settings():
 	var settings = load_json_file(settings_path)
 	if settings.has("use_default_templates"):
 		use_default_templates = settings.use_default_templates
-		debug_print("✓ Settings loaded: use_default_templates = ", use_default_templates)
+		Debug.log("✓ Settings loaded: use_default_templates = %s" % use_default_templates)
 
 func save_settings():
 	var settings = {
 		"use_default_templates": use_default_templates
 	}
 	if save_json_file(settings_path, settings):
-		debug_print("✓ Settings saved")
+		Debug.log("✓ Settings saved")
 	else:
-		debug_print("✓ Settings not saved")
+		Debug.log("✓ Settings not saved")
 		
 func load_json_file(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
