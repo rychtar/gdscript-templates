@@ -393,10 +393,17 @@ func expand_template(template: String, params: Array) -> String:
 	
 	var matches = regex.search_all(template)
 	
-	# replace parameters
-	for i in range(min(params.size(), matches.size())):
-		var placeholder = matches[i].get_string(0) 
-		result = result.replace(placeholder, params[i])	
+	# loop placeholders
+	for i in range(matches.size()):
+		var placeholder = matches[i].get_string(0)  
+		var param_name = matches[i].get_string(1)  
+		
+		if i < params.size():
+			# parameter provided - replace placeholder with value
+			result = result.replace(placeholder, params[i])
+		else:
+			# parameter not provided - keep its name
+			result = result.replace(placeholder, param_name)
 	
 	return result
 
