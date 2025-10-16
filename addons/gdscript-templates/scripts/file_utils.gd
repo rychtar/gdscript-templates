@@ -5,7 +5,7 @@ extends Object
 const Debug = preload("res://addons/gdscript-templates/scripts/debug_utils.gd")
 
 # paths
-const CONFIG_PATH: String = "res://addons/gdscript-templates/templates.json"
+const CONFIG_PATH: String = "res://addons/gdscript-templates/templates/templates.json"
 const USER_CONFIG_PATH: String = "user://code_templates.json"
 const SETTINGS_PATH: String = "user://code_templates_settings.json"
 
