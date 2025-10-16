@@ -1,8 +1,9 @@
 @tool
 extends EditorPlugin
 
-# debug tools
-const Debug = preload("res://addons/gdscript-templates/plugin_debug.gd")
+# tools
+const FileUtils = preload("res://addons/gdscript-templates/scripts/file_utils.gd")
+const Debug = preload("res://addons/gdscript-templates/scripts/debug_utils.gd")
 
 # plugin related constants
 const CURSOR = "CURSOR"
@@ -11,11 +12,6 @@ const CURSOR_MARKER = "|CURSOR|"
 #OS specific vars
 var is_macos = OS.get_name() == "macOS"
 var size_multiplier = 1.3 if is_macos else 1.0
-
-# paths
-var config_path: String = "res://addons/gdscript-templates/templates.json"
-var user_config_path: String = "user://code_templates.json"
-var settings_path: String = "user://code_templates_settings.json"
 
 # templates
 var use_default_templates: bool = true
@@ -181,7 +177,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 		for match in regex.search_all(first_template):
 			var placeholder = match.get_string(0)
 			var param_name = match.get_string(1)
-			if param_name != "CURSOR":
+			if param_name != CURSOR:
 				preview_display = preview_display.replace(placeholder, param_name)
 	
 		preview_text.text = preview_display
@@ -207,7 +203,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 		for match in regex.search_all(template_text):
 			var placeholder = match.get_string(0)  # {name}
 			var param_name = match.get_string(1)   # name
-			if param_name != "CURSOR": 
+			if param_name != CURSOR: 
 				preview_display = preview_display.replace(placeholder, param_name)
 		
 		preview_text.text = preview_display
@@ -529,11 +525,9 @@ func load_templates():
 	templates.clear()
 	
 	if use_default_templates:
-		templates = load_json_file(config_path)
-		Debug.info("✓ Loaded %d templates from %s" % [templates.size(), config_path])
-	
-	var user_templates = load_json_file(user_config_path)
-	Debug.info("✓ Loaded %d User templates from %s" % [user_templates.size(), user_config_path])
+		templates = FileUtils.load_json_file(FileUtils.CONFIG_PATH)
+			
+	var user_templates = FileUtils.load_json_file(FileUtils.USER_CONFIG_PATH)
 	templates.merge(user_templates, true)
 		
 	update_code_completion_cache()
@@ -542,22 +536,6 @@ func update_code_completion_cache():
 	code_completion_prefixes.clear()
 	for keyword in templates.keys():
 		code_completion_prefixes.append(keyword)
-
-func save_default_templates():
-	# Save default templates
-	var file = FileAccess.open(config_path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(templates, "\t"))
-		file.close()
-		Debug.info("✓ Default templates saved in %s" % config_path)
-
-func save_templates():
-	# Save do user templates
-	var file = FileAccess.open(user_config_path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(templates, "\t"))
-		file.close()
-		Debug.info("✓ User Templates saved in %s" % user_config_path)
 
 func _open_settings():
 	
@@ -604,7 +582,7 @@ func _open_settings():
 	var text_edit = TextEdit.new()
 	text_edit.tooltip_text = hint_text
 		
-	var user_templates_only = load_json_file(user_config_path)
+	var user_templates_only = FileUtils.load_json_file(FileUtils.USER_CONFIG_PATH)
 		
 	text_edit.text = JSON.stringify(user_templates_only, "\t")
 	text_edit.custom_minimum_size = Vector2(800, 800)
@@ -619,15 +597,13 @@ func _open_settings():
 			if json.parse(text_edit.text) == OK:
 				var new_user_templates = json.get_data()
 				if new_user_templates is Dictionary:
-					var file = FileAccess.open(user_config_path, FileAccess.WRITE)
-					if file:
-						file.store_string(JSON.stringify(new_user_templates, "\t"))
-						file.close()
-					
+					# save file
+					FileUtils.save_json_file(new_user_templates, FileUtils.USER_CONFIG_PATH)
+			
 					load_templates()
 					update_code_completion_cache()
 					dialog.hide()
-					Debug.info("✓ User Config saved!")
+					
 			else:
 				Debug.info("✗ Error in JSON format!")
 	)
@@ -637,41 +613,13 @@ func _open_settings():
 	get_editor_interface().popup_dialog_centered(dialog)
 			
 func load_settings():
-	var settings = load_json_file(settings_path)
+	var settings = FileUtils.load_json_file(FileUtils.SETTINGS_PATH)
 	if settings.has("use_default_templates"):
 		use_default_templates = settings.use_default_templates
-		Debug.log("✓ Settings loaded: use_default_templates = %s" % use_default_templates)
 
 func save_settings():
 	var settings = {
 		"use_default_templates": use_default_templates
 	}
-	if save_json_file(settings_path, settings):
-		Debug.log("✓ Settings saved")
-	else:
-		Debug.log("✓ Settings not saved")
-		
-func load_json_file(path: String) -> Dictionary:
-	if not FileAccess.file_exists(path):
-		return {}
 	
-	var file = FileAccess.open(path, FileAccess.READ)
-	if not file:
-		return {}
-	
-	var json = JSON.new()
-	var content = file.get_as_text()
-	file.close()
-	
-	if json.parse(content) == OK:
-		return json.get_data()
-	
-	return {}
-
-func save_json_file(path: String, data: Dictionary) -> bool:
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(data, "\t"))
-		file.close()
-		return true
-	return false
+	FileUtils.save_json_file(settings, FileUtils.SETTINGS_PATH)

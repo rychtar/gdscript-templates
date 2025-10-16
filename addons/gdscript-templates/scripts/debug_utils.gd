@@ -23,7 +23,6 @@ static func warn(msg: String) -> void:
 		push_warning("[code-templates-plugin:WARN] %s" % msg)
 		print("[gdscript-templates:WARN] %s" % msg)
 
-
 static func error(msg: String) -> void:
 	if ENABLE_DEBUG:
 		push_error("[code-templates-plugin:ERROR] %s" % msg)
