@@ -28,4 +28,3 @@ static func error(msg: String) -> void:
 	if ENABLE_DEBUG:
 		push_error("[code-templates-plugin:ERROR] %s" % msg)
 		print("[gdscript-templates:ERROR] %s" % msg)
-		

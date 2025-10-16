@@ -1,6 +1,7 @@
 @tool
 extends EditorPlugin
 
+# debug tools
 const Debug = preload("res://addons/gdscript-templates/plugin_debug.gd")
 
 # plugin related constants
@@ -9,6 +10,7 @@ const CURSOR_MARKER = "|CURSOR|"
 
 #OS specific vars
 var is_macos = OS.get_name() == "macOS"
+var size_multiplier = 1.3 if is_macos else 1.0
 
 # paths
 var config_path: String = "res://addons/gdscript-templates/templates.json"
@@ -100,9 +102,6 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	# sort by keyword
 	matches.sort_custom(func(a, b): return a.keyword < b.keyword)
 	
-	# setting macos retina specific adjustments	
-	var size_multiplier = 1.3 if is_macos else 1.0
-	
 	var popup = PopupPanel.new()
 	
 	# create window
@@ -111,8 +110,8 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	var base_height = int(min(matches.size() * 60 + 80, 800) * size_multiplier)
 	popup.size = Vector2i(base_width, base_height)
 	popup.min_size = Vector2i(int(1000 * size_multiplier), int(400 * size_multiplier))
-	popup.borderless = false  # Ukáže title bar
-	popup.unresizable = false  # Můžeš měnit velikost
+	popup.borderless = false
+	popup.unresizable = false
 	popup.wrap_controls = true
 	
 	# Main container
@@ -124,7 +123,6 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	hsplit.set_anchors_preset(Control.PRESET_FULL_RECT)
 	
 	# ItemList - Left side
-	#var item_panel = PanelContainer.new()
 	var item_vbox = VBoxContainer.new()
 	
 	var item_label = Label.new()
@@ -281,13 +279,16 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 
 func _extract_params_from_template(template: String) -> Array:
 	var params = []
+	var seen_params = {}
 	var regex = RegEx.new()
 	regex.compile("\\{([^}]+)\\}") 
 	
 	for result in regex.search_all(template):
 		var param_name = result.get_string(1) 
 		if param_name != CURSOR:
-			params.append("{" + param_name + "}")
+			if not param_name in seen_params:
+				params.append("{" + param_name + "}")
+				seen_params[param_name] = true
 	
 	return params
 
@@ -311,13 +312,12 @@ func _insert_completion(text_edit: TextEdit, partial: String, keyword: String):
 		
 		awaiting_expand = true
 		
-		# show hints
-		if keyword in templates:
-			var template = templates[keyword]
-			var params = _extract_params_from_template(template)
-			var hint_text = "Params: " + " ".join(params)
-			await get_tree().process_frame
-			text_edit.set_code_hint(hint_text)
+		# show hints		
+		var template = templates[keyword]
+		var params = _extract_params_from_template(template)
+		var hint_text = "Params: " + " ".join(params)
+				
+		_show_parameter_tooltip(text_edit, hint_text)			
 	else:
 		# template is paramless
 		text_edit.select(line_idx, start_col, line_idx, col)
@@ -325,6 +325,44 @@ func _insert_completion(text_edit: TextEdit, partial: String, keyword: String):
 		
 		# Expand template
 		try_expand_template()
+
+func _show_parameter_tooltip(text_edit: TextEdit, hint_text: String):
+	
+	var tooltip = PanelContainer.new()
+	tooltip.name = "ParameterTooltip"
+	
+	var style_box = StyleBoxFlat.new()
+	style_box.bg_color = Color(0.2, 0.2, 0.2, 0.95)
+	style_box.border_color = Color(0.4, 0.6, 1.0)
+	
+	style_box.set_border_width_all(2)
+	style_box.set_corner_radius_all(10)
+	
+	tooltip.add_theme_stylebox_override("panel", style_box)
+	
+	var label = Label.new()
+	label.text = hint_text
+	label.add_theme_font_size_override("font_size", 20 * size_multiplier)
+	label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+	
+	tooltip.add_child(label)	
+	text_edit.add_child(tooltip)
+	
+	await get_tree().process_frame
+	var caret_line = text_edit.get_caret_line()
+	var caret_column = text_edit.get_caret_column()
+	var line_height = text_edit.get_line_height()
+	var first_visible = text_edit.get_first_visible_line()
+	
+	var x_pos = caret_column * 8 + 10
+	var y_pos = (caret_line - first_visible + 1) * line_height + 5
+	
+	tooltip.position = Vector2(x_pos, y_pos)
+
+	await get_tree().create_timer(5.0).timeout
+	if is_instance_valid(tooltip):
+		tooltip.queue_free()
+
 
 func get_current_script_editor() -> TextEdit:
 	var script_editor = get_editor_interface().get_script_editor()
@@ -352,9 +390,10 @@ func try_expand_template() -> bool:
 		Debug.warn("✗ Text Editor not found")
 		return false
 		
-	# hide hint
-	text_edit.set_code_hint("")
-	
+	var tooltip = text_edit.get_node_or_null("ParameterTooltip")
+	if tooltip:
+		tooltip.queue_free()
+
 	var line_idx = text_edit.get_caret_line()
 	var col = text_edit.get_caret_column()
 	var line = text_edit.get_line(line_idx)
@@ -464,7 +503,7 @@ func position_cursor_with_indent(text_edit: TextEdit, original_template: String,
 	var marker_col = -1
 	
 	# Find cursor
-	for i in range(20):  # Max 20 řádků
+	for i in range(20):  
 		var line = text_edit.get_line(line_idx + i)
 		var pos = line.find(CURSOR_MARKER)
 		if pos != -1:
