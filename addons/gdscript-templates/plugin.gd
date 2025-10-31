@@ -71,7 +71,7 @@ func _show_code_completion():
 	var line = text_edit.get_line(line_idx)
 	var before_cursor = line.substr(0, col).strip_edges()
 	
-	# Get the last word
+	# get the last word
 	var words = before_cursor.split(" ", false)
 	var partial = words[-1] if words.size() > 0 else ""
 	
@@ -110,7 +110,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	popup.unresizable = false
 	popup.wrap_controls = true
 	
-	# Main container
+	# main container
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	
@@ -118,7 +118,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	var hsplit = HSplitContainer.new()
 	hsplit.set_anchors_preset(Control.PRESET_FULL_RECT)
 	
-	# ItemList - Left side
+	# itemList - Left side
 	var item_vbox = VBoxContainer.new()
 	
 	var item_label = Label.new()
@@ -137,14 +137,13 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	for i in range(matches.size()):
 		item_list.add_item(matches[i].display)
 	
-	# Select first item
+	# select first item
 	if matches.size() > 0:
 		item_list.select(0)
 		
 	item_vbox.add_child(item_list)	
-	#item_panel.add_child(item_vbox)
 	
-	# Right side - Preview panel
+	# right side - Preview panel
 	var preview_panel = PanelContainer.new()
 	preview_panel.focus_mode = Control.FOCUS_NONE
 	
@@ -165,7 +164,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	preview_text.focus_mode = Control.FOCUS_NONE
 	preview_text.context_menu_enabled = false	
 	
-	# Show first template
+	# show first template
 	if matches.size() > 0:
 		var first_template = templates[matches[0].keyword]
 		preview_text.text = first_template
@@ -185,13 +184,13 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	preview_vbox.add_child(preview_text)	
 	preview_panel.add_child(preview_vbox)
 	
-	# Add to split container
+	# add to split container
 	hsplit.add_child(item_vbox)
 	hsplit.add_child(preview_panel)
 	
 	margin.add_child(hsplit)
 	
-	# Update preview when selection changes
+	# update preview when selection changes
 	item_list.item_selected.connect(func(index):
 		var selected = matches[index]
 		var template_text = templates[selected.keyword]
@@ -209,7 +208,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 		preview_text.text = preview_display
 	)
 	
-	# Signal and enter
+	# signal and enter
 	item_list.item_activated.connect(func(index):
 		var selected = matches[index]
 		_insert_completion(text_edit, partial, selected.keyword)
@@ -225,12 +224,12 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	var line_height = text_edit.get_line_height()
 	var first_visible_line = text_edit.get_first_visible_line()
 	
-	# caret possition
+	# caret position
 	var char_width = 9
 	var caret_x = text_edit_global.x + (caret_column * char_width) + 70
 	var caret_y = text_edit_global.y + ((caret_line - first_visible_line) * line_height)
 	
-	# Window offset to not block caret
+	# window offset to not block caret
 	var base_offset_y = (line_height * 2) + 40  
 	var offset_x = 50  
 	var offset_y = int(base_offset_y * (2.0 if is_macos else 1.0))
@@ -238,7 +237,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	var x_pos = caret_x + offset_x
 	var y_pos = caret_y + offset_y
 	
-	# Outside window placement fix
+	# outside window placement fix
 	var screen_size = DisplayServer.screen_get_size()
 	if x_pos + popup.size.x > screen_size.x:
 		x_pos = screen_size.x - popup.size.x - 20 
@@ -319,7 +318,7 @@ func _insert_completion(text_edit: TextEdit, partial: String, keyword: String):
 		text_edit.select(line_idx, start_col, line_idx, col)
 		text_edit.insert_text_at_caret(keyword)
 		
-		# Expand template
+		# expand template
 		try_expand_template()
 
 func _show_parameter_tooltip(text_edit: TextEdit, hint_text: String):
@@ -355,11 +354,6 @@ func _show_parameter_tooltip(text_edit: TextEdit, hint_text: String):
 	
 	tooltip.position = Vector2(x_pos, y_pos)
 
-	await get_tree().create_timer(5.0).timeout
-	if is_instance_valid(tooltip):
-		tooltip.queue_free()
-
-
 func get_current_script_editor() -> TextEdit:
 	var script_editor = get_editor_interface().get_script_editor()
 	var current_editor = script_editor.get_current_editor()
@@ -394,54 +388,84 @@ func try_expand_template() -> bool:
 	var col = text_edit.get_caret_column()
 	var line = text_edit.get_line(line_idx)
 	
-	# get current indent
-	var current_indent = ""
-	var indent_match = line.substr(0, col)
-	for i in range(indent_match.length()):
-		if indent_match[i] in [' ', '\t']:
-			current_indent += indent_match[i]
-		else:
+	# get text before cursor
+	var text_before_cursor = line.substr(0, col).strip_edges()
+	
+	# split into words
+	var words = text_before_cursor.split(" ", false)
+	
+	if words.is_empty():
+		return false
+	
+	# find template keyword from right to left
+	var keyword = ""
+	var params = []
+	var keyword_start_idx = -1
+	
+	for i in range(words.size() - 1, -1, -1):
+		var potential_keyword = words[i].to_lower()
+		
+		# is it a template keyword?
+		var is_template = false
+		for template_key in templates.keys():
+			if template_key.to_lower() == potential_keyword:
+				keyword = words[i]
+				keyword_start_idx = i
+				# everything after is params
+				params = words.slice(i + 1)
+				is_template = true
+				break
+		
+		if is_template:
 			break
 	
-	# text before cursor
-	var before_cursor = line.substr(0, col).strip_edges()
-	
-	if before_cursor.is_empty():
+	if keyword.is_empty():
 		return false
 	
-	# split keyword and params
-	var parts = before_cursor.split(" ", false)
-	if parts.is_empty():
-		return false
+	Debug.info("Keyword: %s Params: %s" % [keyword, params])
 	
-	var keyword = parts[0]
-	var params = parts.slice(1) if parts.size() > 1 else []
+	# find exact position of keyword in line
+	var template_expression = keyword
+	for param in params:
+		template_expression += " " + param
 	
-	# check whether template exists
-	var keyword_lower = keyword.to_lower()
+	# find where this expression starts in text_before_cursor
+	var expr_start_in_before_cursor = text_before_cursor.rfind(template_expression)
+	
+	if expr_start_in_before_cursor == -1:
+		# backup - find at least keyword
+		expr_start_in_before_cursor = text_before_cursor.rfind(keyword)
+	
+	var keyword_start = expr_start_in_before_cursor
+
+	Debug.info("Template expression: %s" % template_expression)
+	Debug.info("Start position: %s to %s" % [keyword_start,col])
+		
+	# get template
 	var found_template = ""
-	
 	for template_key in templates.keys():
-		if template_key.to_lower() == keyword_lower:
+		if template_key.to_lower() == keyword.to_lower():
 			found_template = template_key
 			break
 	
 	if found_template.is_empty():
 		return false
 	
-	# Complete template
+	# complete template
 	var template_text = templates[found_template]
 	var expanded = expand_template(template_text, params)
 	
-	# Fix indent
-	expanded = apply_indentation(expanded, current_indent)
-	
-	var keyword_start = 0
-	for i in range(line.length()):
-		if line[i] not in [' ', '\t']:
-			keyword_start = i
+	# get indent from keyword position
+	var keyword_indent = ""
+	for i in range(keyword_start):
+		if line[i] in [' ', '\t']:
+			keyword_indent += line[i]
+		else:
 			break
 	
+	# fix indent
+	expanded = apply_indentation(expanded, keyword_indent)
+		
 	# delete original text and place update template
 	text_edit.begin_complex_operation()
 	text_edit.select(line_idx, keyword_start, line_idx, col)
@@ -449,7 +473,7 @@ func try_expand_template() -> bool:
 	text_edit.insert_text_at_caret(expanded)
 	
 	# place cursor
-	position_cursor_with_indent(text_edit, template_text, expanded, line_idx, keyword_start, current_indent)
+	position_cursor_with_indent(text_edit, template_text, expanded, line_idx, keyword_start, keyword_indent)
 	text_edit.end_complex_operation()
 	return true
 
