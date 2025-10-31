@@ -1,7 +1,9 @@
 @tool
 extends EditorPlugin
 
-const Debug = preload("res://addons/gdscript-templates/plugin_debug.gd")
+# tools
+const FileUtils = preload("res://addons/gdscript-templates/scripts/file_utils.gd")
+const Debug = preload("res://addons/gdscript-templates/scripts/debug_utils.gd")
 
 # plugin related constants
 const CURSOR = "CURSOR"
@@ -9,11 +11,7 @@ const CURSOR_MARKER = "|CURSOR|"
 
 #OS specific vars
 var is_macos = OS.get_name() == "macOS"
-
-# paths
-var config_path: String = "res://addons/gdscript-templates/templates.json"
-var user_config_path: String = "user://code_templates.json"
-var settings_path: String = "user://code_templates_settings.json"
+var size_multiplier = 1.3 if is_macos else 1.0
 
 # templates
 var use_default_templates: bool = true
@@ -73,7 +71,7 @@ func _show_code_completion():
 	var line = text_edit.get_line(line_idx)
 	var before_cursor = line.substr(0, col).strip_edges()
 	
-	# Get the last word
+	# get the last word
 	var words = before_cursor.split(" ", false)
 	var partial = words[-1] if words.size() > 0 else ""
 	
@@ -100,9 +98,6 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	# sort by keyword
 	matches.sort_custom(func(a, b): return a.keyword < b.keyword)
 	
-	# setting macos retina specific adjustments	
-	var size_multiplier = 1.3 if is_macos else 1.0
-	
 	var popup = PopupPanel.new()
 	
 	# create window
@@ -111,11 +106,11 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	var base_height = int(min(matches.size() * 60 + 80, 800) * size_multiplier)
 	popup.size = Vector2i(base_width, base_height)
 	popup.min_size = Vector2i(int(1000 * size_multiplier), int(400 * size_multiplier))
-	popup.borderless = false  # Ukáže title bar
-	popup.unresizable = false  # Můžeš měnit velikost
+	popup.borderless = false
+	popup.unresizable = false
 	popup.wrap_controls = true
 	
-	# Main container
+	# main container
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	
@@ -123,8 +118,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	var hsplit = HSplitContainer.new()
 	hsplit.set_anchors_preset(Control.PRESET_FULL_RECT)
 	
-	# ItemList - Left side
-	#var item_panel = PanelContainer.new()
+	# itemList - Left side
 	var item_vbox = VBoxContainer.new()
 	
 	var item_label = Label.new()
@@ -143,14 +137,13 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	for i in range(matches.size()):
 		item_list.add_item(matches[i].display)
 	
-	# Select first item
+	# select first item
 	if matches.size() > 0:
 		item_list.select(0)
 		
 	item_vbox.add_child(item_list)	
-	#item_panel.add_child(item_vbox)
 	
-	# Right side - Preview panel
+	# right side - Preview panel
 	var preview_panel = PanelContainer.new()
 	preview_panel.focus_mode = Control.FOCUS_NONE
 	
@@ -171,7 +164,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	preview_text.focus_mode = Control.FOCUS_NONE
 	preview_text.context_menu_enabled = false	
 	
-	# Show first template
+	# show first template
 	if matches.size() > 0:
 		var first_template = templates[matches[0].keyword]
 		preview_text.text = first_template
@@ -183,7 +176,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 		for match in regex.search_all(first_template):
 			var placeholder = match.get_string(0)
 			var param_name = match.get_string(1)
-			if param_name != "CURSOR":
+			if param_name != CURSOR:
 				preview_display = preview_display.replace(placeholder, param_name)
 	
 		preview_text.text = preview_display
@@ -191,13 +184,13 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	preview_vbox.add_child(preview_text)	
 	preview_panel.add_child(preview_vbox)
 	
-	# Add to split container
+	# add to split container
 	hsplit.add_child(item_vbox)
 	hsplit.add_child(preview_panel)
 	
 	margin.add_child(hsplit)
 	
-	# Update preview when selection changes
+	# update preview when selection changes
 	item_list.item_selected.connect(func(index):
 		var selected = matches[index]
 		var template_text = templates[selected.keyword]
@@ -209,13 +202,13 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 		for match in regex.search_all(template_text):
 			var placeholder = match.get_string(0)  # {name}
 			var param_name = match.get_string(1)   # name
-			if param_name != "CURSOR": 
+			if param_name != CURSOR: 
 				preview_display = preview_display.replace(placeholder, param_name)
 		
 		preview_text.text = preview_display
 	)
 	
-	# Signal and enter
+	# signal and enter
 	item_list.item_activated.connect(func(index):
 		var selected = matches[index]
 		_insert_completion(text_edit, partial, selected.keyword)
@@ -231,12 +224,12 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	var line_height = text_edit.get_line_height()
 	var first_visible_line = text_edit.get_first_visible_line()
 	
-	# caret possition
+	# caret position
 	var char_width = 9
 	var caret_x = text_edit_global.x + (caret_column * char_width) + 70
 	var caret_y = text_edit_global.y + ((caret_line - first_visible_line) * line_height)
 	
-	# Window offset to not block caret
+	# window offset to not block caret
 	var base_offset_y = (line_height * 2) + 40  
 	var offset_x = 50  
 	var offset_y = int(base_offset_y * (2.0 if is_macos else 1.0))
@@ -244,7 +237,7 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 	var x_pos = caret_x + offset_x
 	var y_pos = caret_y + offset_y
 	
-	# Outside window placement fix
+	# outside window placement fix
 	var screen_size = DisplayServer.screen_get_size()
 	if x_pos + popup.size.x > screen_size.x:
 		x_pos = screen_size.x - popup.size.x - 20 
@@ -281,13 +274,16 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 
 func _extract_params_from_template(template: String) -> Array:
 	var params = []
+	var seen_params = {}
 	var regex = RegEx.new()
 	regex.compile("\\{([^}]+)\\}") 
 	
 	for result in regex.search_all(template):
 		var param_name = result.get_string(1) 
 		if param_name != CURSOR:
-			params.append("{" + param_name + "}")
+			if not param_name in seen_params:
+				params.append("{" + param_name + "}")
+				seen_params[param_name] = true
 	
 	return params
 
@@ -311,20 +307,52 @@ func _insert_completion(text_edit: TextEdit, partial: String, keyword: String):
 		
 		awaiting_expand = true
 		
-		# show hints
-		if keyword in templates:
-			var template = templates[keyword]
-			var params = _extract_params_from_template(template)
-			var hint_text = "Params: " + " ".join(params)
-			await get_tree().process_frame
-			text_edit.set_code_hint(hint_text)
+		# show hints		
+		var template = templates[keyword]
+		var params = _extract_params_from_template(template)
+		var hint_text = "Params: " + " ".join(params)
+				
+		_show_parameter_tooltip(text_edit, hint_text)			
 	else:
 		# template is paramless
 		text_edit.select(line_idx, start_col, line_idx, col)
 		text_edit.insert_text_at_caret(keyword)
 		
-		# Expand template
+		# expand template
 		try_expand_template()
+
+func _show_parameter_tooltip(text_edit: TextEdit, hint_text: String):
+	
+	var tooltip = PanelContainer.new()
+	tooltip.name = "ParameterTooltip"
+	
+	var style_box = StyleBoxFlat.new()
+	style_box.bg_color = Color(0.2, 0.2, 0.2, 0.95)
+	style_box.border_color = Color(0.4, 0.6, 1.0)
+	
+	style_box.set_border_width_all(2)
+	style_box.set_corner_radius_all(10)
+	
+	tooltip.add_theme_stylebox_override("panel", style_box)
+	
+	var label = Label.new()
+	label.text = hint_text
+	label.add_theme_font_size_override("font_size", 20 * size_multiplier)
+	label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+	
+	tooltip.add_child(label)	
+	text_edit.add_child(tooltip)
+	
+	await get_tree().process_frame
+	var caret_line = text_edit.get_caret_line()
+	var caret_column = text_edit.get_caret_column()
+	var line_height = text_edit.get_line_height()
+	var first_visible = text_edit.get_first_visible_line()
+	
+	var x_pos = caret_column * 8 + 10
+	var y_pos = (caret_line - first_visible + 1) * line_height + 5
+	
+	tooltip.position = Vector2(x_pos, y_pos)
 
 func get_current_script_editor() -> TextEdit:
 	var script_editor = get_editor_interface().get_script_editor()
@@ -352,61 +380,92 @@ func try_expand_template() -> bool:
 		Debug.warn("✗ Text Editor not found")
 		return false
 		
-	# hide hint
-	text_edit.set_code_hint("")
-	
+	var tooltip = text_edit.get_node_or_null("ParameterTooltip")
+	if tooltip:
+		tooltip.queue_free()
+
 	var line_idx = text_edit.get_caret_line()
 	var col = text_edit.get_caret_column()
 	var line = text_edit.get_line(line_idx)
 	
-	# get current indent
-	var current_indent = ""
-	var indent_match = line.substr(0, col)
-	for i in range(indent_match.length()):
-		if indent_match[i] in [' ', '\t']:
-			current_indent += indent_match[i]
-		else:
+	# get text before cursor
+	var text_before_cursor = line.substr(0, col).strip_edges()
+	
+	# split into words
+	var words = text_before_cursor.split(" ", false)
+	
+	if words.is_empty():
+		return false
+	
+	# find template keyword from right to left
+	var keyword = ""
+	var params = []
+	var keyword_start_idx = -1
+	
+	for i in range(words.size() - 1, -1, -1):
+		var potential_keyword = words[i].to_lower()
+		
+		# is it a template keyword?
+		var is_template = false
+		for template_key in templates.keys():
+			if template_key.to_lower() == potential_keyword:
+				keyword = words[i]
+				keyword_start_idx = i
+				# everything after is params
+				params = words.slice(i + 1)
+				is_template = true
+				break
+		
+		if is_template:
 			break
 	
-	# text before cursor
-	var before_cursor = line.substr(0, col).strip_edges()
-	
-	if before_cursor.is_empty():
+	if keyword.is_empty():
 		return false
 	
-	# split keyword and params
-	var parts = before_cursor.split(" ", false)
-	if parts.is_empty():
-		return false
+	Debug.info("Keyword: %s Params: %s" % [keyword, params])
 	
-	var keyword = parts[0]
-	var params = parts.slice(1) if parts.size() > 1 else []
+	# find exact position of keyword in line
+	var template_expression = keyword
+	for param in params:
+		template_expression += " " + param
 	
-	# check whether template exists
-	var keyword_lower = keyword.to_lower()
+	# find where this expression starts in text_before_cursor
+	var expr_start_in_before_cursor = text_before_cursor.rfind(template_expression)
+	
+	if expr_start_in_before_cursor == -1:
+		# backup - find at least keyword
+		expr_start_in_before_cursor = text_before_cursor.rfind(keyword)
+	
+	var keyword_start = expr_start_in_before_cursor
+
+	Debug.info("Template expression: %s" % template_expression)
+	Debug.info("Start position: %s to %s" % [keyword_start,col])
+		
+	# get template
 	var found_template = ""
-	
 	for template_key in templates.keys():
-		if template_key.to_lower() == keyword_lower:
+		if template_key.to_lower() == keyword.to_lower():
 			found_template = template_key
 			break
 	
 	if found_template.is_empty():
 		return false
 	
-	# Complete template
+	# complete template
 	var template_text = templates[found_template]
 	var expanded = expand_template(template_text, params)
 	
-	# Fix indent
-	expanded = apply_indentation(expanded, current_indent)
-	
-	var keyword_start = 0
-	for i in range(line.length()):
-		if line[i] not in [' ', '\t']:
-			keyword_start = i
+	# get indent from keyword position
+	var keyword_indent = ""
+	for i in range(keyword_start):
+		if line[i] in [' ', '\t']:
+			keyword_indent += line[i]
+		else:
 			break
 	
+	# fix indent
+	expanded = apply_indentation(expanded, keyword_indent)
+		
 	# delete original text and place update template
 	text_edit.begin_complex_operation()
 	text_edit.select(line_idx, keyword_start, line_idx, col)
@@ -414,7 +473,7 @@ func try_expand_template() -> bool:
 	text_edit.insert_text_at_caret(expanded)
 	
 	# place cursor
-	position_cursor_with_indent(text_edit, template_text, expanded, line_idx, keyword_start, current_indent)
+	position_cursor_with_indent(text_edit, template_text, expanded, line_idx, keyword_start, keyword_indent)
 	text_edit.end_complex_operation()
 	return true
 
@@ -464,7 +523,7 @@ func position_cursor_with_indent(text_edit: TextEdit, original_template: String,
 	var marker_col = -1
 	
 	# Find cursor
-	for i in range(20):  # Max 20 řádků
+	for i in range(20):  
 		var line = text_edit.get_line(line_idx + i)
 		var pos = line.find(CURSOR_MARKER)
 		if pos != -1:
@@ -490,11 +549,9 @@ func load_templates():
 	templates.clear()
 	
 	if use_default_templates:
-		templates = load_json_file(config_path)
-		Debug.info("✓ Loaded %d templates from %s" % [templates.size(), config_path])
-	
-	var user_templates = load_json_file(user_config_path)
-	Debug.info("✓ Loaded %d User templates from %s" % [user_templates.size(), user_config_path])
+		templates = FileUtils.load_json_file(FileUtils.CONFIG_PATH)
+			
+	var user_templates = FileUtils.load_json_file(FileUtils.USER_CONFIG_PATH)
 	templates.merge(user_templates, true)
 		
 	update_code_completion_cache()
@@ -503,22 +560,6 @@ func update_code_completion_cache():
 	code_completion_prefixes.clear()
 	for keyword in templates.keys():
 		code_completion_prefixes.append(keyword)
-
-func save_default_templates():
-	# Save default templates
-	var file = FileAccess.open(config_path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(templates, "\t"))
-		file.close()
-		Debug.info("✓ Default templates saved in %s" % config_path)
-
-func save_templates():
-	# Save do user templates
-	var file = FileAccess.open(user_config_path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(templates, "\t"))
-		file.close()
-		Debug.info("✓ User Templates saved in %s" % user_config_path)
 
 func _open_settings():
 	
@@ -565,7 +606,7 @@ func _open_settings():
 	var text_edit = TextEdit.new()
 	text_edit.tooltip_text = hint_text
 		
-	var user_templates_only = load_json_file(user_config_path)
+	var user_templates_only = FileUtils.load_json_file(FileUtils.USER_CONFIG_PATH)
 		
 	text_edit.text = JSON.stringify(user_templates_only, "\t")
 	text_edit.custom_minimum_size = Vector2(800, 800)
@@ -580,15 +621,13 @@ func _open_settings():
 			if json.parse(text_edit.text) == OK:
 				var new_user_templates = json.get_data()
 				if new_user_templates is Dictionary:
-					var file = FileAccess.open(user_config_path, FileAccess.WRITE)
-					if file:
-						file.store_string(JSON.stringify(new_user_templates, "\t"))
-						file.close()
-					
+					# save file
+					FileUtils.save_json_file(new_user_templates, FileUtils.USER_CONFIG_PATH)
+			
 					load_templates()
 					update_code_completion_cache()
 					dialog.hide()
-					Debug.info("✓ User Config saved!")
+					
 			else:
 				Debug.info("✗ Error in JSON format!")
 	)
@@ -598,41 +637,13 @@ func _open_settings():
 	get_editor_interface().popup_dialog_centered(dialog)
 			
 func load_settings():
-	var settings = load_json_file(settings_path)
+	var settings = FileUtils.load_json_file(FileUtils.SETTINGS_PATH)
 	if settings.has("use_default_templates"):
 		use_default_templates = settings.use_default_templates
-		Debug.log("✓ Settings loaded: use_default_templates = %s" % use_default_templates)
 
 func save_settings():
 	var settings = {
 		"use_default_templates": use_default_templates
 	}
-	if save_json_file(settings_path, settings):
-		Debug.log("✓ Settings saved")
-	else:
-		Debug.log("✓ Settings not saved")
-		
-func load_json_file(path: String) -> Dictionary:
-	if not FileAccess.file_exists(path):
-		return {}
 	
-	var file = FileAccess.open(path, FileAccess.READ)
-	if not file:
-		return {}
-	
-	var json = JSON.new()
-	var content = file.get_as_text()
-	file.close()
-	
-	if json.parse(content) == OK:
-		return json.get_data()
-	
-	return {}
-
-func save_json_file(path: String, data: Dictionary) -> bool:
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(data, "\t"))
-		file.close()
-		return true
-	return false
+	FileUtils.save_json_file(settings, FileUtils.SETTINGS_PATH)
