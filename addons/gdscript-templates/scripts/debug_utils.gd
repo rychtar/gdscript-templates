@@ -3,7 +3,7 @@ extends Object
 
 # debug is enabled only for this project
 const EXPECTED_PROJECT_NAME := "gdscript-templates"
-const DEBUG := true
+const DEBUG := false
 
 static var ENABLE_DEBUG := _detect_dev_mode() or DEBUG
 
