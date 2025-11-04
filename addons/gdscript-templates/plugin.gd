@@ -435,11 +435,6 @@ func try_expand_template() -> bool:
 	if expr_start_in_before_cursor == -1:
 		# backup - find at least keyword
 		expr_start_in_before_cursor = text_before_cursor.rfind(keyword)
-	
-	var keyword_start = expr_start_in_before_cursor
-
-	Debug.info("Template expression: %s" % template_expression)
-	Debug.info("Start position: %s to %s" % [keyword_start,col])
 		
 	# get template
 	var found_template = ""
@@ -457,7 +452,13 @@ func try_expand_template() -> bool:
 	
 	# get indent from keyword position
 	var keyword_indent = ""
-	for i in range(keyword_start):
+	var actual_keyword_start = line.find(template_expression)
+	
+	if actual_keyword_start == -1:
+		# Backup - find keyword
+		actual_keyword_start = line.find(keyword)
+	
+	for i in range(actual_keyword_start):
 		if line[i] in [' ', '\t']:
 			keyword_indent += line[i]
 		else:
@@ -468,12 +469,12 @@ func try_expand_template() -> bool:
 		
 	# delete original text and place update template
 	text_edit.begin_complex_operation()
-	text_edit.select(line_idx, keyword_start, line_idx, col)
+	text_edit.select(line_idx, actual_keyword_start, line_idx, col)
 	text_edit.delete_selection()
 	text_edit.insert_text_at_caret(expanded)
 	
 	# place cursor
-	position_cursor_with_indent(text_edit, template_text, expanded, line_idx, keyword_start, keyword_indent)
+	position_cursor_with_indent(text_edit, template_text, expanded, line_idx, actual_keyword_start, keyword_indent)
 	text_edit.end_complex_operation()
 	return true
 
