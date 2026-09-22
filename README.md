@@ -1,112 +1,74 @@
-# GDScript Templates - Godot Plugin
+# GDScript Templates
 
-A powerful code snippet expansion plugin for Godot 4.x that accelerates your workflow with customizable templates and intelligent code completion.
+Code snippets for the Godot 4 script editor. Type a keyword, press `Ctrl+E` and it expands into code.
 
-## 🚀 Features
+```
+printd health  →  print("health: ", health)
+vec 10 20      →  Vector2(10, 20)
+fori 5         →  for i in range(5):
+```
 
-- **Smart Template Expansion** - Type keywords and expand them into full code blocks
-- **Descriptive Parameters** - Use meaningful parameter names like `{name}`, `{type}` 
-- **Partial Parameter Support** - Fill only some parameters, rest become placeholders (e.g., `vec 10` → `Vector2(10, y)`)
-- **Interactive Preview Panel** - See template code before inserting
-- **Auto-completion Popup** - Browse available templates with Ctrl+Space
-- **Automatic Indentation** - Templates respect your current code indentation
-- **Cursor Positioning** - Automatically places cursor at the right spot using `|CURSOR|` marker
-- **User Templates** - Override or extend default templates with your own
+## Installation
 
-## ⌨️ Keyboard Shortcuts
+Copy `addons/gdscript-templates` into your project's `addons` folder and enable
+**GDScript Templates** in **Project → Project Settings → Plugins**.
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+Space` | Open template suggestions popup |
-| `Ctrl+E` | Expand template on current line |
-| `Tab` | Quick expand after selecting from popup |
-| `ESC` | Close popup window |
-| `↑↓` | Navigate through template list |
-| `Enter` | Select template from list |
+Requires Godot 4.2+ (tested with 4.7).
 
-## 📦 Installation
+## Usage
 
-1. Download or clone this repository
-2. Copy the `gdscript-template` folder into your Godot project's `addons` directory
-3. Open your project in Godot
-4. Go to **Project → Project Settings → Plugins**
-5. Find "Code Templates" and set it to **Enable**
-6. Restart Godot (recommended)
+| Key | Action |
+|-----|--------|
+| `Ctrl+E` | Expand the template before the cursor |
+| `Ctrl+Space` | Open the template browser |
+| `Tab` | Go to the next parameter |
+| `Esc` | Stop jumping between parameters |
 
-## 🎯 Usage
+Words after the keyword fill the template parameters in order. Parameters you
+skip are left as placeholders: `vec 10` gives `Vector2(10, y)` with `y` selected,
+so you can type its value and press `Tab` to go to the next one. A parameter used
+more than once (like `{name}` in `prop`) only needs to be typed once.
 
-### Basic Usage
+The template browser (`Ctrl+Space`) lists all templates with a preview. Type to
+filter the list, then press `Enter` or `Tab` to insert the selected template.
 
-1. Type a template keyword (e.g., `fori`, `func`, `vec`)
-2. Press `Ctrl+E` to expand, or `Ctrl+Space` to browse templates
-3. Add parameters after the keyword: `printd health` → `print("health: ", health)`
+There are about 100 built-in templates: functions (`func`, `ready`, `process`),
+variables (`export`, `onready`, `prop`), control flow (`ife`, `for`, `fori`, `match`),
+signals (`signal`, `sigcon`), nodes (`addch`, `getnode`), tweens, math and more.
 
-### Templates Without Parameters
+## Custom templates
 
-Templates like `ready`, `process` expand immediately when selected from popup.
+Open **Project → Tools → GDScript Templates...** (or **Edit Templates...** in the
+browser). You can add your own templates or change the built-in ones. A changed
+built-in template can be reverted to the original.
 
-### Templates With Parameters
+Your templates are saved to `gdscript_templates.json` in the Godot editor config
+folder, so all your projects use the same file. Template syntax:
 
-Templates like `vec`, `func` wait for parameters:
-- `vec 10 20` → `Vector2(10, 20)`
-- `vec 10` → `Vector2(10, y)` (partial parameters)
-- `func update delta float` → `func update(delta) -> float:`
-
-## ⚙️ Configuration
-
-Access settings via **Project → Tools → Code Templates Settings**
-
-- **Use default templates** - Toggle built-in templates on/off
-- **User templates** - Add your own templates in JSON format
-- Templates are saved to `user://code_templates.json`
-
-### Template Format
 ```json
 {
-  "keyword": "template code with {param1} and {param2}|CURSOR|"
+  "myloop": "for {item} in {collection}:\n\tif {item}.{property}:\n\t\t|CURSOR|",
+  "log": {
+    "body": "print(\"{value}: \", {value})|CURSOR|",
+    "description": "Print a value with its name"
+  }
 }
 ```
 
-- Use `{descriptive_name}` for parameters
-- Use `|CURSOR|` to mark cursor position after expansion
-- Use `\n` for new lines, `\t` for tabs
+- `{name}` is a parameter
+- `|CURSOR|` is where the cursor ends up after expanding
+- `\t` is one indent level (converted to spaces if your editor uses spaces)
 
-### Example Custom Template
-```json
-{
-  "myloop": "for {item} in {collection}:\n\tif {item}.{property}:\n\t\t|CURSOR|"
-}
-```
+## Settings
 
-## 📚 Built-in Templates
+Go to **Editor → Editor Settings → Plugins → GDScript Templates**. Godot only
+shows plugin settings when **Advanced Settings** (top right) is turned on.
 
-The plugin includes 80+ templates for common Godot patterns:
-- Functions (`func`, `ready`, `process`, `input`)
-- Variables (`export`, `onready`, `const`)
-- Control flow (`if`, `for`, `while`, `match`)
-- Signals (`signal`, `sigcon`, `sigem`)
-- Nodes (`addch`, `getnode`, `inst`)
-- Math (`vec2`, `vec3`, `lerp`, `clamp`)
-- And many more...
+- **Use Default Templates**: turn off to use only your own templates
+- **Popup Size**: size of the template browser
+- **Show Templates Shortcut**, **Expand Template Shortcut**: keyboard shortcuts
 
-Press `Ctrl+Space` to browse all available templates!
-
-## 🔧 Requirements
-
-- Godot 4.0 or higher
-
-## 📝 License
-
-MIT License - Feel free to use and modify!
-
-## 🐛 Issues & Contributions
-
-Found a bug or have a feature request? Contributions are welcome!
-
-
-**Happy Coding! 🚀**
-
-## 📸 Screenshots
+## Screenshots
 
 ![Keyword + Preview Window](https://github.com/rychtar/gdscript-templates/blob/main/addons/gdscript-templates/images/keyword.png?raw=true)
 
@@ -114,3 +76,6 @@ Found a bug or have a feature request? Contributions are welcome!
 
 ![Default Templates](https://github.com/rychtar/gdscript-templates/blob/main/addons/gdscript-templates/images/templates.png?raw=true)
 
+## License
+
+MIT
