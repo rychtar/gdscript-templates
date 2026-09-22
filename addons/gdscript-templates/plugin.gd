@@ -20,6 +20,8 @@ var templates: Dictionary = {}
 var code_completion_prefixes: PackedStringArray = []
 var awaiting_expand: bool = false 
 
+var hooked_text_edits: Dictionary = {}
+
 func _enter_tree():
 	
 	# load data and prepare cache
@@ -30,6 +32,12 @@ func _enter_tree():
 	# add plugin to the menu
 	add_tool_menu_item("GDScript Templates Settings", _open_settings)
 	
+	# hook script editors - works for docked and floating script editor
+	# (_input only receives events from the main window viewport)
+	var script_editor = get_editor_interface().get_script_editor()
+	script_editor.editor_script_changed.connect(_on_editor_script_changed)
+	_hook_current_text_edit()
+	
 	# logs
 	Debug.info("✓ GDScript Templates Plugin activated")
 	Debug.info("  Ctrl+E = Complete code from template")
@@ -37,19 +45,40 @@ func _enter_tree():
 
 func _exit_tree():
 	remove_tool_menu_item("GDScript Templates Settings")
+	
+	var script_editor = get_editor_interface().get_script_editor()
+	if script_editor.editor_script_changed.is_connected(_on_editor_script_changed):
+		script_editor.editor_script_changed.disconnect(_on_editor_script_changed)
+	
+	for text_edit in hooked_text_edits.values():
+		if is_instance_valid(text_edit) and text_edit.gui_input.is_connected(_on_text_edit_gui_input):
+			text_edit.gui_input.disconnect(_on_text_edit_gui_input)
+	hooked_text_edits.clear()
+
+func _on_editor_script_changed(_script):
+	_hook_current_text_edit()
+
+func _hook_current_text_edit():
+	var text_edit = get_current_script_editor()
+	if not text_edit or text_edit.gui_input.is_connected(_on_text_edit_gui_input):
+		return
+	text_edit.gui_input.connect(_on_text_edit_gui_input.bind(text_edit))
+	hooked_text_edits[text_edit.get_instance_id()] = text_edit
+	text_edit.tree_exited.connect(func(): hooked_text_edits.erase(text_edit.get_instance_id()), CONNECT_ONE_SHOT)
 
 # TODO: custom shortcut in settings + auto detection?
-func _input(event: InputEvent):
+# gui_input signal is emitted before CodeEdit handles the event, so accept_event() blocks default behaviour
+func _on_text_edit_gui_input(event: InputEvent, text_edit: TextEdit):
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.ctrl_pressed and event.keycode == KEY_E:
+			text_edit.accept_event()
 			_on_expand_pressed()
-			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_TAB and awaiting_expand:
+			text_edit.accept_event()
 			_on_expand_pressed()
-			get_viewport().set_input_as_handled()
 		elif event.ctrl_pressed and event.keycode == KEY_SPACE:
+			text_edit.accept_event()
 			_show_code_completion()
-			get_viewport().set_input_as_handled()
 
 func _on_expand_pressed():
 	if try_expand_template():
@@ -217,45 +246,39 @@ func _create_centered_completion_popup(text_edit: TextEdit, partial: String):
 		
 	popup.add_child(margin)
 	
-	# setting up window vs caret possition
-	var text_edit_global = text_edit.get_screen_position()
-	var caret_line = text_edit.get_caret_line()
-	var caret_column = text_edit.get_caret_column()
+	# popup belongs to the window with the script editor (main or floating)
+	var parent_window = text_edit.get_window()
+	parent_window.add_child(popup)
+	
+	# caret position relative to the parent window
+	var caret_pos = text_edit.get_global_transform_with_canvas() * text_edit.get_caret_draw_pos()
 	var line_height = text_edit.get_line_height()
-	var first_visible_line = text_edit.get_first_visible_line()
+	var popup_pos = Vector2i(caret_pos) + Vector2i(50, line_height + 10)
 	
-	# caret position
-	var char_width = 9
-	var caret_x = text_edit_global.x + (caret_column * char_width) + 70
-	var caret_y = text_edit_global.y + ((caret_line - first_visible_line) * line_height)
+	# keep popup inside the screen (or parent window when popups are embedded)
+	var embedded = parent_window.is_embedded() or parent_window.gui_embed_subwindows
+	var bounds = Rect2i(Vector2i.ZERO, parent_window.size) if embedded \
+		else DisplayServer.screen_get_usable_rect(parent_window.current_screen)
+	var window_origin = Vector2i.ZERO if embedded else parent_window.position
+	var abs_pos = window_origin + popup_pos
+	var margin_px = 20
+	abs_pos.x = clampi(abs_pos.x, bounds.position.x + margin_px, max(bounds.position.x + margin_px, bounds.end.x - popup.size.x - margin_px))
+	abs_pos.y = clampi(abs_pos.y, bounds.position.y + margin_px, max(bounds.position.y + margin_px, bounds.end.y - popup.size.y - margin_px))
+	popup_pos = abs_pos - window_origin
 	
-	# window offset to not block caret
-	var base_offset_y = (line_height * 2) + 40  
-	var offset_x = 50  
-	var offset_y = int(base_offset_y * (2.0 if is_macos else 1.0))
-	
-	var x_pos = caret_x + offset_x
-	var y_pos = caret_y + offset_y
-	
-	# outside window placement fix
-	var screen_size = DisplayServer.screen_get_size()
-	if x_pos + popup.size.x > screen_size.x:
-		x_pos = screen_size.x - popup.size.x - 20 
-	if y_pos + popup.size.y > screen_size.y:
-		y_pos = screen_size.y - popup.size.y - 20
-	
-	x_pos = max(20, x_pos)
-	y_pos = max(20, y_pos)
-	
-	get_editor_interface().get_base_control().add_child(popup)
-	popup.position = Vector2i(x_pos, y_pos)  
-	popup.popup()
+	# free popup when closed (focus lost, escape, ...)
+	popup.popup_hide.connect(func():
+		popup.queue_free()
+		if is_instance_valid(text_edit):
+			text_edit.grab_focus()
+	)
+	popup.popup_on_parent(Rect2i(popup_pos, popup.size))
 	
 	# set focus for window
 	await get_tree().process_frame
 	item_list.grab_focus()
 	
-	# close when focus is lost
+	# close when window is closed
 	popup.close_requested.connect(func(): popup.queue_free())
 	
 	# other item_list inputs
@@ -344,15 +367,7 @@ func _show_parameter_tooltip(text_edit: TextEdit, hint_text: String):
 	text_edit.add_child(tooltip)
 	
 	await get_tree().process_frame
-	var caret_line = text_edit.get_caret_line()
-	var caret_column = text_edit.get_caret_column()
-	var line_height = text_edit.get_line_height()
-	var first_visible = text_edit.get_first_visible_line()
-	
-	var x_pos = caret_column * 8 + 10
-	var y_pos = (caret_line - first_visible + 1) * line_height + 5
-	
-	tooltip.position = Vector2(x_pos, y_pos)
+	tooltip.position = text_edit.get_caret_draw_pos() + Vector2(10, 5)
 
 func get_current_script_editor() -> TextEdit:
 	var script_editor = get_editor_interface().get_script_editor()
