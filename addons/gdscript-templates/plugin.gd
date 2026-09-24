@@ -104,40 +104,61 @@ func _cancel_code_completion_later(text_edit: TextEdit):
 	if is_instance_valid(text_edit) and text_edit is CodeEdit:
 		text_edit.cancel_code_completion()
 
-# expands "keyword param1 param2" before the caret
-func expand_template_at_caret(text_edit: TextEdit) -> bool:
+# finds "keyword param1 param2" before the caret, last known keyword wins
+# returns {keyword, word, start_column, params} or {} if there is no keyword
+func _find_keyword_before_caret(text_edit: TextEdit) -> Dictionary:
 	var line_idx = text_edit.get_caret_line()
 	var before_caret = text_edit.get_line(line_idx).substr(0, text_edit.get_caret_column())
 	var words = RegEx.create_from_string("\\S+").search_all(before_caret)
 
-	# last known keyword wins, words after it are params
 	for i in range(words.size() - 1, -1, -1):
 		var keyword = store.find_keyword(words[i].get_string())
 		if keyword.is_empty():
 			continue
-		var params = words.slice(i + 1).map(func(word): return word.get_string())
-		Debug.info("Keyword: %s Params: %s" % [keyword, params])
-		insert_template(text_edit, keyword, words[i].get_start(), params)
-		return true
+		return {
+			"keyword": keyword,
+			"word": words[i].get_string(),
+			"start_column": words[i].get_start(),
+			"params": words.slice(i + 1).map(func(word): return word.get_string()),
+		}
+	return {}
 
-	Debug.info("✗ No template found.")
-	return false
+func expand_template_at_caret(text_edit: TextEdit) -> bool:
+	var found = _find_keyword_before_caret(text_edit)
+	if found.is_empty():
+		Debug.info("✗ No template found.")
+		return false
+
+	Debug.info("Keyword: %s Params: %s" % [found.keyword, found.params])
+	insert_template(text_edit, found.keyword, found.start_column, found.params)
+	return true
 
 func show_templates_popup(text_edit: TextEdit):
 	if text_edit is CodeEdit:
 		text_edit.cancel_code_completion()
 
-	# word before the caret is the initial filter and gets replaced
-	var line_idx = text_edit.get_caret_line()
-	var caret_column = text_edit.get_caret_column()
-	var partial = RegEx.create_from_string("\\w+$").search(text_edit.get_line(line_idx).substr(0, caret_column))
-	var start_column = partial.get_start() if partial else caret_column
+	# a known keyword (with params after it) or the word before the caret
+	# is the initial filter and gets replaced
+	var filter = ""
+	var start_column = text_edit.get_caret_column()
+	var params = []
+	var found = _find_keyword_before_caret(text_edit)
+	if not found.is_empty():
+		filter = found.word
+		start_column = found.start_column
+		params = found.params
+	else:
+		var line = text_edit.get_line(text_edit.get_caret_line())
+		var partial = RegEx.create_from_string("\\w+$").search(line.substr(0, start_column))
+		if partial:
+			filter = partial.get_string()
+			start_column = partial.get_start()
 
 	var popup = CompletionPopup.new()
-	popup.setup(store.templates, partial.get_string() if partial else "", Settings.popup_size())
+	popup.setup(store.templates, filter, Settings.popup_size())
 	popup.template_chosen.connect(func(keyword):
 		if is_instance_valid(text_edit):
-			insert_template(text_edit, keyword, start_column)
+			insert_template(text_edit, keyword, start_column, params)
 	)
 	popup.edit_requested.connect(func(): _open_template_editor(text_edit.get_window()))
 	popup.popup_hide.connect(func():
