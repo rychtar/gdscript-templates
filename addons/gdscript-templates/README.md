@@ -1,6 +1,9 @@
 # GDScript Templates
 
-Code snippets for the Godot 4 script editor. Type a keyword, press `Ctrl+E` and it expands into code.
+![GDScript Templates](https://github.com/rychtar/gdscript-templates/blob/main/media/gdscript-templates-thumbnail.webp?raw=true)
+
+Code snippets for the Godot 4 script editor. Type a keyword, press `Ctrl+E` (or pick it
+from Godot's code completion) and it expands into code.
 
 ```
 printd health  →  print("health: ", health)
@@ -20,6 +23,7 @@ Requires Godot 4.2+ (tested with 4.7).
 | Key | Action |
 |-----|--------|
 | `Ctrl+E` | Expand the template before the cursor (opens the template browser when there is none) |
+| `Enter` / `Tab` | Expand a template picked in Godot's code completion |
 | `Ctrl+Space` | Open the template browser |
 | `Tab` | Go to the next parameter |
 | `Shift+Tab` | Go to the previous parameter |
@@ -33,12 +37,16 @@ in `prop`) only needs to be typed once. Put a value with spaces in quotes:
 `func move "delta: float"`.
 
 Select some code and press `Ctrl+E` (or `Ctrl+Space`) to wrap it in a template:
-`if`, `ife`, `for`, `fori`, `while`, `region`, `isval`, `isnull` and `dicthas`
-put the selected code inside the new block.
+`if`, `ife`, `for`, `fori`, `while`, `region`, `isval`, `isnull`, `dicthas` and
+`evact` put the selected code inside the new block.
 
-The template browser (`Ctrl+Space`) lists all templates with a preview. Type to
-filter the list, then press `Enter` or `Tab` to insert the selected template.
-Templates you use the most are listed first.
+Templates also show up in Godot's own code completion, marked `(template)`, after
+you type the first two letters of a keyword. Pick one with `Enter` or `Tab` and it
+expands like with `Ctrl+E`.
+
+The template browser (`Ctrl+Space`) lists all templates by category, with the ones
+you use the most at the top, and shows a preview. Type to search keywords,
+descriptions and categories, then press `Enter` or `Tab` to insert the selected template.
 
 There are more than 100 built-in templates: functions (`func`, `ready`, `process`),
 variables (`export`, `onready`, `prop`), control flow (`if`, `ife`, `for`, `fori`, `match`),
@@ -64,7 +72,8 @@ Godot are picked up automatically. Template syntax:
   "debugonly": "if OS.is_debug_build():\n\t{selection}|CURSOR|",
   "log": {
     "body": "print(\"{value}: \", {value})|CURSOR|",
-    "description": "Print a value with its name"
+    "description": "Print a value with its name",
+    "category": "Debug"
   }
 }
 ```
@@ -74,6 +83,7 @@ Godot are picked up automatically. Template syntax:
 - `{selection}` is the code that was selected when the template was inserted
 - `|CURSOR|` is where the cursor ends up after expanding
 - `\t` is one indent level (converted to spaces if your editor uses spaces)
+- `description` and `category` are optional, they are shown in the template browser
 
 ## Settings
 
@@ -81,20 +91,12 @@ Go to **Editor → Editor Settings → Plugins → GDScript Templates**. Godot o
 shows plugin settings when **Advanced Settings** (top right) is turned on.
 
 - **Use Default Templates**: turn off to use only your own templates
+- **Show In Code Completion**: turn off to keep templates out of Godot's code completion
 - **Show Templates Shortcut**, **Expand Template Shortcut**: keyboard shortcuts
 
 `Ctrl+Space` replaces Godot's own "request code completion" shortcut in the script
 editor. On macOS it is also used to switch keyboard languages, so it may not reach
 Godot at all. If either is a problem, set a different **Show Templates Shortcut**.
 
-## Screenshots
-
-![Keyword + Preview Window](https://github.com/rychtar/gdscript-templates/blob/main/addons/gdscript-templates/images/keyword.png?raw=true)
-
-![Completed code](https://github.com/rychtar/gdscript-templates/blob/main/addons/gdscript-templates/images/expanded.png?raw=true)
-
-![Default Templates](https://github.com/rychtar/gdscript-templates/blob/main/addons/gdscript-templates/images/templates.png?raw=true)
-
-## License
 
 MIT

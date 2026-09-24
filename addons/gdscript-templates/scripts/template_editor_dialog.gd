@@ -38,6 +38,8 @@ var _details: Control
 var _keyword: LineEdit
 var _keyword_error: Label
 var _description: LineEdit
+var _category: LineEdit
+var _category_menu: MenuButton
 var _scope: OptionButton
 var _status: Label
 var _body: CodeEdit
@@ -67,7 +69,8 @@ func setup(defaults: Dictionary, user: Dictionary, project: Dictionary, use_defa
 			return
 		if _confirm_discard:
 			_confirm_discard = false
-			_ask_to_save()
+			# deferred: the window is still the exclusive child while it's hiding
+			_ask_to_save.call_deferred()
 		else:
 			queue_free()
 	)
@@ -175,6 +178,27 @@ func _build() -> void:
 	_description.text_changed.connect(func(_text): _on_entry_changed())
 	grid.add_child(_description)
 
+	grid.add_child(_create_label("Category"))
+	var category_row = HBoxContainer.new()
+	category_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_child(category_row)
+	_category = LineEdit.new()
+	_category.placeholder_text = "Optional, groups the templates in the templates popup"
+	_category.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_category.text_changed.connect(func(_text): _on_entry_changed())
+	category_row.add_child(_category)
+	# pick one of the existing categories
+	_category_menu = MenuButton.new()
+	_category_menu.icon = editor_theme.get_icon("GuiDropdown", "EditorIcons")
+	_category_menu.tooltip_text = "Existing categories"
+	_category_menu.flat = true
+	_category_menu.about_to_popup.connect(_fill_category_menu)
+	_category_menu.get_popup().index_pressed.connect(func(index):
+		_category.text = _category_menu.get_popup().get_item_text(index)
+		_on_entry_changed()
+	)
+	category_row.add_child(_category_menu)
+
 	grid.add_child(_create_label("Available in"))
 	_scope = OptionButton.new()
 	_scope.add_item("All projects", SCOPE_ALL)
@@ -267,7 +291,9 @@ func _refresh_list(select_keyword: String = _selected) -> void:
 
 	_keys.clear()
 	for keyword in all_keys:
-		if query.is_empty() or keyword.to_lower().contains(query) or _get_entry(keyword).description.to_lower().contains(query):
+		var entry = _get_entry(keyword)
+		if query.is_empty() or keyword.to_lower().contains(query) or entry.description.to_lower().contains(query) \
+				or entry.category.to_lower().contains(query):
 			_keys.append(keyword)
 	_keys.sort()
 
@@ -295,6 +321,10 @@ func _load(keyword: String) -> void:
 		var entry = _get_entry(keyword)
 		_keyword.text = keyword
 		_description.text = entry.description
+		_category.text = entry.category
+		# changed before 1.4 - offer the original category
+		if entry.category.is_empty() and _defaults.has(keyword):
+			_category.text = _defaults[keyword].category
 		_body.text = entry.body
 		_body.clear_undo_history()
 
@@ -327,6 +357,18 @@ func _update_state() -> void:
 	if index != -1:
 		_list.set_item_text(index, _item_text(_selected))
 
+func _fill_category_menu() -> void:
+	var categories = PackedStringArray()
+	for templates in [_defaults, _user, _project]:
+		for keyword in templates:
+			var category = templates[keyword].category
+			if not category.is_empty() and not categories.has(category):
+				categories.append(category)
+	var menu = _category_menu.get_popup()
+	menu.clear()
+	for category in categories:
+		menu.add_item(category)
+
 func _update_params_info() -> void:
 	var body = _body.text
 	var params = Expander.get_params(body)
@@ -342,7 +384,7 @@ func _update_params_info() -> void:
 func _on_entry_changed() -> void:
 	if _updating or _selected.is_empty():
 		return
-	var entry = {"body": _body.text, "description": _description.text.strip_edges()}
+	var entry = {"body": _body.text, "description": _description.text.strip_edges(), "category": _category.text.strip_edges()}
 	var own = _own_templates(_selected)
 	if _use_defaults and _defaults.has(_selected) and _defaults[_selected] == entry:
 		own.erase(_selected)
@@ -397,7 +439,7 @@ func _unique_keyword(base: String) -> String:
 
 func _on_add_pressed() -> void:
 	var keyword = _unique_keyword("new_template")
-	_user[keyword] = {"body": "|CURSOR|", "description": ""}
+	_user[keyword] = {"body": "|CURSOR|", "description": "", "category": ""}
 	_search.text = ""
 	_refresh_list(keyword)
 	_keyword.grab_focus()

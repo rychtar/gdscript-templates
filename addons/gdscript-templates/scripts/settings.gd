@@ -7,6 +7,7 @@ const FileUtils = preload("res://addons/gdscript-templates/scripts/file_utils.gd
 
 const PREFIX = "plugins/gdscript_templates/"
 const USE_DEFAULT_TEMPLATES = PREFIX + "use_default_templates"
+const SHOW_IN_CODE_COMPLETION = PREFIX + "show_in_code_completion"
 const SHORTCUT_SHOW = PREFIX + "show_templates_shortcut"
 const SHORTCUT_EXPAND = PREFIX + "expand_template_shortcut"
 
@@ -41,6 +42,7 @@ static func register() -> void:
 		settings.set_setting(USE_DEFAULT_TEMPLATES, legacy.get("use_default_templates", true))
 
 	_add_setting(settings, USE_DEFAULT_TEMPLATES, true, TYPE_BOOL)
+	_add_setting(settings, SHOW_IN_CODE_COMPLETION, true, TYPE_BOOL)
 
 	# separate default instance - the inspector edits the shortcut in place
 	if not settings.has_setting(SHORTCUT_SHOW):
@@ -76,3 +78,6 @@ static func create_gdscript_highlighter() -> SyntaxHighlighter:
 
 static func use_default_templates() -> bool:
 	return EditorInterface.get_editor_settings().get_setting(USE_DEFAULT_TEMPLATES)
+
+static func show_in_code_completion() -> bool:
+	return EditorInterface.get_editor_settings().get_setting(SHOW_IN_CODE_COMPLETION)

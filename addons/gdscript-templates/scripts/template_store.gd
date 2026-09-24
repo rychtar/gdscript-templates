@@ -5,7 +5,7 @@ extends RefCounted
 #   defaults  - shipped with the plugin
 #   user      - editor config folder, shared by all projects
 #   project   - res://.gdscript_templates.json, can be committed and shared with the team
-# Entry: {body, description}. JSON value is a body string or {"body", "description"}.
+# Entry: {body, description, category}. JSON value is a body string or {"body", "description", "category"}.
 
 const FileUtils = preload("res://addons/gdscript-templates/scripts/file_utils.gd")
 const Debug = preload("res://addons/gdscript-templates/scripts/debug_utils.gd")
@@ -78,6 +78,32 @@ func rebuild() -> void:
 	templates = defaults.duplicate(true) if use_defaults else {}
 	templates.merge(user, true)
 	templates.merge(project, true)
+	# a changed default template without a category (made before 1.4) keeps the original one
+	for keyword in templates:
+		var entry = templates[keyword]
+		if entry.category.is_empty() and defaults.has(keyword):
+			templates[keyword] = entry.merged({"category": defaults[keyword].category}, true)
+
+# categories in the order of the default templates, then the others alphabetically,
+# "" (templates without a category) last
+func get_categories() -> PackedStringArray:
+	var categories = PackedStringArray()
+	for keyword in defaults:
+		if not categories.has(defaults[keyword].category):
+			categories.append(defaults[keyword].category)
+	var others = PackedStringArray()
+	var uncategorized = false
+	for keyword in templates:
+		var category = templates[keyword].category
+		if category.is_empty():
+			uncategorized = true
+		elif not categories.has(category) and not others.has(category):
+			others.append(category)
+	others.sort()
+	categories.append_array(others)
+	if uncategorized:
+		categories.append("")
+	return categories
 
 func save_templates(new_user: Dictionary, new_project: Dictionary) -> bool:
 	user = new_user.duplicate(true)
@@ -114,9 +140,13 @@ static func normalize(raw: Dictionary) -> Dictionary:
 	for keyword in raw:
 		var value = raw[keyword]
 		if value is String:
-			result[keyword] = {"body": value, "description": ""}
+			result[keyword] = {"body": value, "description": "", "category": ""}
 		elif value is Dictionary and value.has("body"):
-			result[keyword] = {"body": str(value.body), "description": str(value.get("description", ""))}
+			result[keyword] = {
+				"body": str(value.body),
+				"description": str(value.get("description", "")),
+				"category": str(value.get("category", "")),
+			}
 		else:
 			push_warning("GDScript Templates: invalid template \"%s\" skipped" % keyword)
 	return result
@@ -125,8 +155,13 @@ static func serialize(entries: Dictionary) -> Dictionary:
 	var result = {}
 	for keyword in entries:
 		var entry = entries[keyword]
-		if entry.description.is_empty():
+		if entry.description.is_empty() and entry.category.is_empty():
 			result[keyword] = entry.body
 		else:
-			result[keyword] = {"body": entry.body, "description": entry.description}
+			var value = {"body": entry.body}
+			if not entry.description.is_empty():
+				value.description = entry.description
+			if not entry.category.is_empty():
+				value.category = entry.category
+			result[keyword] = value
 	return result

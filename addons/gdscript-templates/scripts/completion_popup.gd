@@ -14,9 +14,14 @@ const Expander = preload("res://addons/gdscript-templates/scripts/template_expan
 
 # panel height in script lines, shrinks when the script editor is smaller
 const HEIGHT_LINES = 22
+# templates in the "Most Used" group
+const MOST_USED_COUNT = 5
+const UNCATEGORIZED = "Custom"
 
 var _templates: Dictionary = {}
+# keyword of each list item, "" for category headers
 var _keys: Array[String] = []
+var _categories: PackedStringArray = []
 # the first word of the search filters the templates, the rest are parameter values
 var _query := ""
 var _param_count := 0
@@ -36,10 +41,11 @@ var _list: ItemList
 var _info: Label
 var _preview: CodeEdit
 
-func setup(templates: Dictionary, filter: String, selection: String = "", usage: Dictionary = {}) -> void:
+func setup(templates: Dictionary, filter: String, selection: String = "", usage: Dictionary = {}, categories: PackedStringArray = []) -> void:
 	_templates = templates
 	_selection = selection
 	_usage = usage
+	_categories = categories
 	_build()
 	_search.text = filter
 
@@ -85,7 +91,10 @@ func _build() -> void:
 		_picked_keyword = _keys[index]
 		_show_preview(index)
 	)
-	_list.item_activated.connect(_choose)
+	_list.item_activated.connect(func(index):
+		if not _keys[index].is_empty():
+			_choose(index)
+	)
 	split.add_child(_list)
 
 	var right = VBoxContainer.new()
@@ -261,15 +270,32 @@ func _refilter() -> void:
 	_query = query
 	_param_count = words.size() - 1 if words.size() > 0 else 0
 
-	# templates that take all the typed values (and wrap the selection) first,
-	# then by the kind of match (exact, prefix, ...), the most used, how well the keyword matches
+	_list.clear()
+	_keys.clear()
+	# nothing typed - all templates by category
+	if query.is_empty() and _selection.is_empty():
+		_add_grouped()
+	else:
+		_add_scored(query)
+
+	if _keys.all(func(keyword): return keyword.is_empty()):
+		_info.text = "No matching template."
+		_info.visible = true
+		_preview.text = ""
+	else:
+		var index = _keys.find(_picked_keyword) if not _picked_keyword.is_empty() else -1
+		_select(index if index != -1 else _next_item(0, 1))
+
+# templates that take all the typed values (and wrap the selection) first,
+# then by the kind of match (exact, prefix, ...), the most used, how well the keyword matches
+func _add_scored(query: String) -> void:
 	var scored = []
 	for keyword in _templates:
-		var body: String = _templates[keyword].body
-		var score = match_score(query, keyword, _templates[keyword].description)
+		var entry = _templates[keyword]
+		var score = match_score(query, keyword, entry.description + "\n" + entry.category)
 		if score >= 0:
-			var fits = Expander.get_params(body).size() >= _param_count
-			if not _selection.is_empty() and not Expander.uses_selection(body):
+			var fits = Expander.get_params(entry.body).size() >= _param_count
+			if not _selection.is_empty() and not Expander.uses_selection(entry.body):
 				fits = false
 			scored.append([1 if fits else 0, match_kind(score), int(_usage.get(keyword, 0)), score, keyword])
 	scored.sort_custom(func(a, b):
@@ -278,24 +304,44 @@ func _refilter() -> void:
 				return a[i] > b[i]
 		return a[4] < b[4]
 	)
-
-	_list.clear()
-	_keys.clear()
 	for item in scored:
-		var keyword: String = item[4]
-		var params = Expander.get_params(_templates[keyword].body)
-		var display = keyword
-		if not params.is_empty():
-			display += "  " + " ".join(Array(params).map(func(p): return "{%s}" % p))
-		_keys.append(keyword)
-		_list.add_item(display)
-		_list.set_item_tooltip(_list.item_count - 1, _templates[keyword].description)
+		_add_template(item[4])
 
-	if _keys.is_empty():
-		_info.text = "No matching template."
-		_preview.text = ""
-	else:
-		_select(maxi(_keys.find(_picked_keyword), 0))
+func _add_grouped() -> void:
+	var used = _usage.keys().filter(func(keyword): return _templates.has(keyword) and int(_usage[keyword]) > 0)
+	used.sort_custom(func(a, b): return int(_usage[a]) > int(_usage[b]))
+	if not used.is_empty():
+		_add_header("Most Used")
+		for keyword in used.slice(0, MOST_USED_COUNT):
+			_add_template(keyword)
+
+	for category in _categories:
+		var keywords = _templates.keys().filter(func(keyword): return _templates[keyword].category == category)
+		if keywords.is_empty():
+			continue
+		_add_header(category if not category.is_empty() else UNCATEGORIZED)
+		for keyword in keywords:
+			_add_template(keyword)
+
+func _add_header(text: String) -> void:
+	_keys.append("")
+	var index = _list.add_item(text)
+	_list.set_item_selectable(index, false)
+	_list.set_item_custom_fg_color(index, EditorInterface.get_editor_theme().get_color("accent_color", "Editor"))
+
+func _add_template(keyword: String) -> void:
+	var entry = _templates[keyword]
+	var params = Expander.get_params(entry.body)
+	var display = keyword
+	if not params.is_empty():
+		display += "  " + " ".join(Array(params).map(func(p): return "{%s}" % p))
+	_keys.append(keyword)
+	# indented under the category header
+	var index = _list.add_item(("   " if _query.is_empty() and _selection.is_empty() else "") + display)
+	var tooltip = entry.description
+	if not entry.category.is_empty():
+		tooltip += ("\n" if not tooltip.is_empty() else "") + "Category: " + entry.category
+	_list.set_item_tooltip(index, tooltip)
 
 # higher is better, -1 = no match
 static func match_score(query: String, keyword: String, description: String) -> int:
@@ -346,13 +392,26 @@ func _select(index: int) -> void:
 	_list.ensure_current_is_visible()
 	_show_preview(index)
 
+# first template item from index in the direction (1 or -1), skips headers, -1 when there's none
+func _next_item(index: int, direction: int) -> int:
+	while index >= 0 and index < _keys.size():
+		if not _keys[index].is_empty():
+			return index
+		index += direction
+	return -1
+
 func _move_selection(step: int) -> void:
-	if _keys.is_empty():
-		return
 	var selected = _list.get_selected_items()
-	var index = selected[0] + step if selected.size() > 0 else 0
-	_select(clampi(index, 0, _keys.size() - 1))
-	_picked_keyword = _keys[_list.get_selected_items()[0]]
+	var from = selected[0] if selected.size() > 0 else -1
+	var target = clampi(from + step, 0, _keys.size() - 1)
+	var direction = 1 if step > 0 else -1
+	var index = _next_item(target, direction)
+	if index == -1:
+		index = _next_item(target, -direction)
+	if index == -1:
+		return
+	_select(index)
+	_picked_keyword = _keys[index]
 
 func _show_preview(index: int) -> void:
 	var entry = _templates[_keys[index]]

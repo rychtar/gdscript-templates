@@ -1,6 +1,14 @@
-# Unreleased
+# 1.4
 
 ## Added
+- Templates in Godot's code completion: after two letters of a keyword the template shows up
+  in the completion popup with its parameters, marked `(template)`: `vec3 {x} {y} {z}  (template)`.
+  `Enter` / `Tab` expands it.
+  Can be turned off with **Show In Code Completion** in Editor Settings.
+- Template categories. The template browser lists the templates by category when nothing is typed,
+  with the most used templates at the top, and searches categories too.
+  The template editor has a **Category** field with a list of the existing categories.
+  In JSON: `{"body": ..., "description": ..., "category": ...}`.
 - Default values for parameters: `{name=value}`. A skipped parameter gets its default,
   so the expanded code is valid right away (`vec 10` → `Vector2(10, 0)`). `{name=}` is an empty default.
 - `{selection}`: select code and press `Ctrl+E` / `Ctrl+Space` to wrap it in a template.

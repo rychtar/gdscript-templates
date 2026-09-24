@@ -13,6 +13,11 @@ const TOOL_MENU_ITEM = "GDScript Templates..."
 # 1.0 menu item, left behind when updating without editor restart
 const LEGACY_TOOL_MENU_ITEM = "GDScript Templates Settings"
 
+# code completion options with this value prefix are templates
+const COMPLETION_MARKER = "gdscript_templates:"
+# templates are offered in code completion after this many typed characters
+const COMPLETION_MIN_PREFIX = 2
+
 var store: TemplateStore
 var session: TabStopSession
 var popup: CompletionPopup
@@ -49,8 +54,12 @@ func _exit_tree():
 		script_editor.editor_script_changed.disconnect(_on_editor_script_changed)
 
 	for text_edit in hooked_text_edits.values():
-		if is_instance_valid(text_edit) and text_edit.gui_input.is_connected(_on_text_edit_gui_input):
+		if not is_instance_valid(text_edit):
+			continue
+		if text_edit.gui_input.is_connected(_on_text_edit_gui_input):
 			text_edit.gui_input.disconnect(_on_text_edit_gui_input)
+		if text_edit is CodeEdit and text_edit.code_completion_requested.is_connected(_on_code_completion_requested):
+			text_edit.code_completion_requested.disconnect(_on_code_completion_requested)
 	hooked_text_edits.clear()
 	session = null
 
@@ -68,12 +77,19 @@ func _hook_current_text_edit():
 	if not text_edit or text_edit.gui_input.is_connected(_on_text_edit_gui_input):
 		return
 	text_edit.gui_input.connect(_on_text_edit_gui_input.bind(text_edit))
+	# connected after the script editor, so the script's own options are already added
+	if text_edit is CodeEdit:
+		text_edit.code_completion_requested.connect(_on_code_completion_requested.bind(text_edit))
 	hooked_text_edits[text_edit.get_instance_id()] = text_edit
 	text_edit.tree_exited.connect(func(): hooked_text_edits.erase(text_edit.get_instance_id()), CONNECT_ONE_SHOT)
 
 # gui_input is emitted before CodeEdit handles the event, accept_event() blocks the default action
 func _on_text_edit_gui_input(event: InputEvent, text_edit: TextEdit):
 	if not (event is InputEventKey and event.pressed):
+		return
+
+	if _is_code_completion_active(text_edit) and _confirm_template_completion(text_edit, event):
+		text_edit.accept_event()
 		return
 
 	if session and session.active and session.text_edit == text_edit:
@@ -98,6 +114,65 @@ func _on_text_edit_gui_input(event: InputEvent, text_edit: TextEdit):
 	elif Settings.matches_shortcut(Settings.SHORTCUT_SHOW, event):
 		text_edit.accept_event()
 		show_templates_popup(text_edit)
+
+# adds the templates matching the word before the caret to the code completion popup
+func _on_code_completion_requested(text_edit: CodeEdit):
+	if not Settings.show_in_code_completion():
+		return
+	var word = _completion_word(text_edit)
+	if word.length() < COMPLETION_MIN_PREFIX:
+		return
+	var word_lower = word.to_lower()
+	var keywords = store.templates.keys().filter(func(keyword): return keyword.to_lower().begins_with(word_lower))
+	if keywords.is_empty():
+		return
+
+	# update_code_completion_options() replaces the options, add the script's ones again
+	for option in text_edit.get_code_completion_options():
+		text_edit.add_code_completion_option(option.kind, option.display_text, option.insert_text,
+			option.font_color, option.icon, option.default_value, option.location)
+	var editor_theme = EditorInterface.get_editor_theme()
+	var icon = editor_theme.get_icon("Script", "EditorIcons")
+	var color = editor_theme.get_color("font_color", "Editor")
+	for keyword in keywords:
+		var params = TemplateExpander.get_params(store.templates[keyword].body)
+		var display = keyword
+		if not params.is_empty():
+			display += " " + " ".join(Array(params).map(func(param): return "{%s}" % param))
+		# insert_text is used when the option is picked with the mouse, Ctrl+E then expands it
+		text_edit.add_code_completion_option(CodeEdit.KIND_PLAIN_TEXT, display + "  (template)", keyword,
+			color, icon, COMPLETION_MARKER + keyword)
+	text_edit.update_code_completion_options(false)
+
+# the word being completed, "" in strings, comments and after "." "$" "%" "@"
+func _completion_word(text_edit: CodeEdit) -> String:
+	var line_idx = text_edit.get_caret_line()
+	var column = text_edit.get_caret_column()
+	if text_edit.is_in_string(line_idx, column) != -1 or text_edit.is_in_comment(line_idx, column) != -1:
+		return ""
+	var before_caret = text_edit.get_line(line_idx).substr(0, column)
+	var result = RegEx.create_from_string("(^|[^.$%@\\w])(\\w+)$").search(before_caret)
+	return result.get_string(2) if result else ""
+
+# Enter / Tab on a template in the code completion popup expands it
+func _confirm_template_completion(text_edit: CodeEdit, event: InputEventKey) -> bool:
+	if not (event.is_action("ui_text_completion_accept", true) or event.is_action("ui_text_completion_replace", true)):
+		return false
+	var option = text_edit.get_code_completion_option(text_edit.get_code_completion_selected_index())
+	var value = option.get("default_value")
+	if not (value is String and value.begins_with(COMPLETION_MARKER)):
+		return false
+	var keyword = value.trim_prefix(COMPLETION_MARKER)
+	if not store.templates.has(keyword):
+		return false
+
+	text_edit.cancel_code_completion()
+	var line_idx = text_edit.get_caret_line()
+	var caret_column = text_edit.get_caret_column()
+	var word = RegEx.create_from_string("\\w+$").search(text_edit.get_line(line_idx).substr(0, caret_column))
+	var start_column = word.get_start() if word else caret_column
+	insert_template(text_edit, keyword, Vector2i(line_idx, start_column), Vector2i(line_idx, caret_column))
+	return true
 
 func _is_code_completion_active(text_edit: TextEdit) -> bool:
 	return text_edit is CodeEdit and text_edit.get_code_completion_selected_index() != -1
@@ -176,7 +251,7 @@ func show_templates_popup(text_edit: TextEdit):
 
 	_close_templates_popup()
 	popup = CompletionPopup.new()
-	popup.setup(store.templates, filter, selection, store.usage)
+	popup.setup(store.templates, filter, selection, store.usage, store.get_categories())
 	popup.template_chosen.connect(func(keyword, params):
 		if is_instance_valid(text_edit):
 			insert_template(text_edit, keyword, from, to, params, selection)
@@ -197,7 +272,8 @@ func _get_selected_range(text_edit: TextEdit) -> Dictionary:
 		to.y = text_edit.get_line(to.x).length()
 		var first_line = text_edit.get_line(from.x)
 		from.y = first_line.length() - first_line.strip_edges(true, false).length()
-	var text = _get_text_between(text_edit, from, to)
+	# whole lines, so the first one keeps its indentation for dedent()
+	var text = _get_text_between(text_edit, Vector2i(from.x, 0) if from.x != to.x else from, to)
 	return {"from": from, "to": to, "text": TemplateExpander.dedent(text.strip_edges(false, true))}
 
 static func _get_text_between(text_edit: TextEdit, from: Vector2i, to: Vector2i) -> String:
