@@ -77,8 +77,10 @@ func _on_text_edit_gui_input(event: InputEvent, text_edit: TextEdit):
 		return
 
 	if session and session.active and session.text_edit == text_edit:
-		if event.keycode == KEY_TAB and not _has_modifiers(event) and not _is_code_completion_active(text_edit):
-			if session.next():
+		if event.keycode == KEY_TAB and not _is_code_completion_active(text_edit) \
+				and not (event.ctrl_pressed or event.alt_pressed or event.meta_pressed):
+			var consumed = session.previous() if event.shift_pressed else session.next()
+			if consumed:
 				text_edit.accept_event()
 				_cancel_code_completion_later(text_edit)
 			return
@@ -90,13 +92,12 @@ func _on_text_edit_gui_input(event: InputEvent, text_edit: TextEdit):
 
 	if Settings.matches_shortcut(Settings.SHORTCUT_EXPAND, event):
 		text_edit.accept_event()
-		expand_template_at_caret(text_edit)
+		# selected code or no keyword - pick the template in the browser
+		if text_edit.has_selection() or not expand_template_at_caret(text_edit):
+			show_templates_popup(text_edit)
 	elif Settings.matches_shortcut(Settings.SHORTCUT_SHOW, event):
 		text_edit.accept_event()
 		show_templates_popup(text_edit)
-
-func _has_modifiers(event: InputEventKey) -> bool:
-	return event.shift_pressed or event.ctrl_pressed or event.alt_pressed or event.meta_pressed
 
 func _is_code_completion_active(text_edit: TextEdit) -> bool:
 	return text_edit is CodeEdit and text_edit.get_code_completion_selected_index() != -1
@@ -115,81 +116,122 @@ func _find_keyword_before_caret(text_edit: TextEdit) -> Dictionary:
 
 	for i in range(words.size() - 1, -1, -1):
 		var keyword = store.find_keyword(words[i].get_string())
-		if keyword.is_empty():
+		# odd number of quotes before the word - it's inside a string or a quoted param
+		if keyword.is_empty() or before_caret.substr(0, words[i].get_start()).count("\"") % 2 == 1:
 			continue
+		# "quoted text" is one param
+		var params = TemplateExpander.split_args(before_caret.substr(words[i].get_end()))
 		return {
 			"keyword": keyword,
 			"word": words[i].get_string(),
 			"start_column": words[i].get_start(),
-			"params": words.slice(i + 1).map(func(word): return word.get_string()),
+			"params": params.map(func(param): return param.value),
+			# as typed, with quotes
+			"raw_params": params.map(func(param): return param.raw),
 		}
 	return {}
 
 func expand_template_at_caret(text_edit: TextEdit) -> bool:
+	store.reload_if_changed()
 	var found = _find_keyword_before_caret(text_edit)
 	if found.is_empty():
 		Debug.info("✗ No template found.")
 		return false
 
 	Debug.info("Keyword: %s Params: %s" % [found.keyword, found.params])
-	insert_template(text_edit, found.keyword, found.start_column, found.params)
+	var line_idx = text_edit.get_caret_line()
+	insert_template(text_edit, found.keyword, Vector2i(line_idx, found.start_column), Vector2i(line_idx, text_edit.get_caret_column()), found.params)
 	return true
 
 func show_templates_popup(text_edit: TextEdit):
+	store.reload_if_changed()
 	if text_edit is CodeEdit:
 		text_edit.cancel_code_completion()
 
-	# a known keyword (with params after it) or the word before the caret
-	# is the initial filter and gets replaced
+	var line_idx = text_edit.get_caret_line()
+	var from = Vector2i(line_idx, text_edit.get_caret_column())
+	var to = from
+	var selection = ""
 	var filter = ""
-	var start_column = text_edit.get_caret_column()
-	var found = _find_keyword_before_caret(text_edit)
-	if not found.is_empty():
-		# params typed after the keyword go into the search, where they can be edited
-		filter = " ".join([found.word] + found.params)
-		start_column = found.start_column
+
+	if text_edit.has_selection():
+		var selected = _get_selected_range(text_edit)
+		from = selected.from
+		to = selected.to
+		selection = selected.text
 	else:
-		var line = text_edit.get_line(text_edit.get_caret_line())
-		var partial = RegEx.create_from_string("\\w+$").search(line.substr(0, start_column))
-		if partial:
-			filter = partial.get_string()
-			start_column = partial.get_start()
+		# a known keyword (with params after it) or the word before the caret
+		# is the initial filter and gets replaced
+		var found = _find_keyword_before_caret(text_edit)
+		if not found.is_empty():
+			# params typed after the keyword go into the search, where they can be edited
+			filter = " ".join([found.word] + found.raw_params)
+			from.y = found.start_column
+		else:
+			var line = text_edit.get_line(line_idx)
+			var partial = RegEx.create_from_string("\\w+$").search(line.substr(0, from.y))
+			if partial:
+				filter = partial.get_string()
+				from.y = partial.get_start()
 
 	_close_templates_popup()
 	popup = CompletionPopup.new()
-	popup.setup(store.templates, filter)
+	popup.setup(store.templates, filter, selection, store.usage)
 	popup.template_chosen.connect(func(keyword, params):
 		if is_instance_valid(text_edit):
-			insert_template(text_edit, keyword, start_column, params)
+			insert_template(text_edit, keyword, from, to, params, selection)
 	)
 	popup.edit_requested.connect(func(): _open_template_editor(text_edit.get_window()))
 	popup.closed.connect(func(): popup = null)
 	popup.open(text_edit)
+
+# selection spanning more lines is extended to whole lines (without the first line's indentation),
+# returns {from, to, text} with the text dedented
+func _get_selected_range(text_edit: TextEdit) -> Dictionary:
+	var from = Vector2i(text_edit.get_selection_from_line(), text_edit.get_selection_from_column())
+	var to = Vector2i(text_edit.get_selection_to_line(), text_edit.get_selection_to_column())
+	if from.x != to.x:
+		# selecting whole lines ends at the start of the next line
+		if to.y == 0:
+			to.x -= 1
+		to.y = text_edit.get_line(to.x).length()
+		var first_line = text_edit.get_line(from.x)
+		from.y = first_line.length() - first_line.strip_edges(true, false).length()
+	var text = _get_text_between(text_edit, from, to)
+	return {"from": from, "to": to, "text": TemplateExpander.dedent(text.strip_edges(false, true))}
+
+static func _get_text_between(text_edit: TextEdit, from: Vector2i, to: Vector2i) -> String:
+	if from.x == to.x:
+		return text_edit.get_line(from.x).substr(from.y, to.y - from.y)
+	var lines = [text_edit.get_line(from.x).substr(from.y)]
+	for line_idx in range(from.x + 1, to.x):
+		lines.append(text_edit.get_line(line_idx))
+	lines.append(text_edit.get_line(to.x).substr(0, to.y))
+	return "\n".join(lines)
 
 func _close_templates_popup():
 	if is_instance_valid(popup):
 		popup.close(false)
 	popup = null
 
-# replaces text from start_column to the caret with the template
-func insert_template(text_edit: TextEdit, keyword: String, start_column: int, params: Array = []):
+# replaces the text from `from` to `to` (line, column) with the template
+func insert_template(text_edit: TextEdit, keyword: String, from: Vector2i, to: Vector2i, params: Array = [], selection: String = ""):
 	if session:
 		session.finish()
 		session = null
 
-	var line_idx = text_edit.get_caret_line()
-	var caret_column = text_edit.get_caret_column()
-	var line = text_edit.get_line(line_idx)
+	var line = text_edit.get_line(from.x)
 	var indent = line.substr(0, line.length() - line.strip_edges(true, false).length())
-	var expanded = TemplateExpander.expand(store.templates[keyword].body, params, indent, _get_indent_unit(text_edit))
+	var expanded = TemplateExpander.expand(store.templates[keyword].body, params, indent, _get_indent_unit(text_edit), selection)
 
 	text_edit.deselect()
 	text_edit.begin_complex_operation()
-	text_edit.remove_text(line_idx, start_column, line_idx, caret_column)
-	text_edit.insert_text(expanded.text, line_idx, start_column)
+	text_edit.remove_text(from.x, from.y, to.x, to.y)
+	text_edit.insert_text(expanded.text, from.x, from.y)
 	text_edit.end_complex_operation()
+	store.record_use(keyword)
 
-	session = TabStopSession.new(text_edit, expanded, line_idx, start_column)
+	session = TabStopSession.new(text_edit, expanded, from.x, from.y)
 	session.start()
 	if not session.active:
 		session = null
@@ -204,9 +246,10 @@ func _get_indent_unit(text_edit: TextEdit) -> String:
 	return "\t"
 
 func _open_template_editor(window: Window = null):
+	store.reload_if_changed()
 	var dialog = TemplateEditorDialog.new()
-	dialog.setup(store.defaults, store.user, store.use_defaults)
-	dialog.templates_saved.connect(func(user_templates): store.save_user_templates(user_templates))
+	dialog.setup(store.defaults, store.user, store.project, store.use_defaults)
+	dialog.templates_saved.connect(store.save_templates)
 	dialog.show_dialog(window)
 
 func get_current_script_editor() -> TextEdit:

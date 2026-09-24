@@ -22,6 +22,10 @@ var _query := ""
 var _param_count := 0
 # picked with the arrows or the mouse, kept while typing parameter values
 var _picked_keyword := ""
+# code selected in the script, templates with {selection} wrap it
+var _selection := ""
+# keyword -> how many times it was inserted
+var _usage: Dictionary = {}
 
 var _text_edit: TextEdit
 # caret line when opened, the panel sits right under it
@@ -32,8 +36,10 @@ var _list: ItemList
 var _info: Label
 var _preview: CodeEdit
 
-func setup(templates: Dictionary, filter: String) -> void:
+func setup(templates: Dictionary, filter: String, selection: String = "", usage: Dictionary = {}) -> void:
 	_templates = templates
+	_selection = selection
+	_usage = usage
 	_build()
 	_search.text = filter
 
@@ -48,7 +54,7 @@ func _build() -> void:
 	root.add_child(top)
 
 	_search = LineEdit.new()
-	_search.placeholder_text = "Search templates... (keyword param1 param2)"
+	_search.placeholder_text = "Search templates... (keyword param1 \"param 2\")"
 	_search.clear_button_enabled = true
 	_search.right_icon = editor_theme.get_icon("Search", "EditorIcons")
 	_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -242,7 +248,7 @@ func _on_search_changed() -> void:
 			_show_preview(selected[0])
 
 func _search_words() -> PackedStringArray:
-	return _search.text.split(" ", false)
+	return PackedStringArray(Expander.split_args(_search.text).map(func(word): return word.value))
 
 func _params() -> Array:
 	return Array(_search_words().slice(1))
@@ -255,23 +261,28 @@ func _refilter() -> void:
 	_query = query
 	_param_count = words.size() - 1 if words.size() > 0 else 0
 
-	# templates that take all the typed values first, then by how well the keyword matches
+	# templates that take all the typed values (and wrap the selection) first,
+	# then by the kind of match (exact, prefix, ...), the most used, how well the keyword matches
 	var scored = []
 	for keyword in _templates:
+		var body: String = _templates[keyword].body
 		var score = match_score(query, keyword, _templates[keyword].description)
 		if score >= 0:
-			var fits = Expander.get_params(_templates[keyword].body).size() >= _param_count
-			scored.append([1 if fits else 0, score, keyword])
+			var fits = Expander.get_params(body).size() >= _param_count
+			if not _selection.is_empty() and not Expander.uses_selection(body):
+				fits = false
+			scored.append([1 if fits else 0, match_kind(score), int(_usage.get(keyword, 0)), score, keyword])
 	scored.sort_custom(func(a, b):
-		if a[0] != b[0]:
-			return a[0] > b[0]
-		return a[1] > b[1] if a[1] != b[1] else a[2] < b[2]
+		for i in 4:
+			if a[i] != b[i]:
+				return a[i] > b[i]
+		return a[4] < b[4]
 	)
 
 	_list.clear()
 	_keys.clear()
 	for item in scored:
-		var keyword: String = item[2]
+		var keyword: String = item[4]
 		var params = Expander.get_params(_templates[keyword].body)
 		var display = keyword
 		if not params.is_empty():
@@ -306,6 +317,18 @@ static func match_score(query: String, keyword: String, description: String) -> 
 		return 100
 	return -1
 
+# 4 exact, 3 prefix, 2 contains, 1 fuzzy, 0 description or empty query
+static func match_kind(score: int) -> int:
+	if score >= 1000:
+		return 4
+	if score >= 800:
+		return 3
+	if score >= 600:
+		return 2
+	if score > 100:
+		return 1
+	return 0
+
 # number of skipped characters when query chars appear in order, -1 otherwise
 static func _subsequence_gaps(query: String, text: String) -> int:
 	var pos = 0
@@ -335,15 +358,24 @@ func _show_preview(index: int) -> void:
 	var entry = _templates[_keys[index]]
 	var info: String = entry.description
 	var params = Expander.get_params(entry.body)
+	var defaults = Expander.get_defaults(entry.body)
 	var values = _params()
+	var lines = [] if info.is_empty() else [info]
 	if not params.is_empty():
 		var described = []
 		for i in params.size():
-			described.append(params[i] + (" = " + values[i] if i < values.size() else ""))
-		info += ("\n" if not info.is_empty() else "") + "Parameters: " + ", ".join(described)
-	_info.text = info
-	_info.visible = not info.is_empty()
-	_preview.text = Expander.get_preview(entry.body, values)
+			if i < values.size():
+				described.append("%s = %s" % [params[i], values[i]])
+			elif defaults.has(params[i]):
+				described.append("%s (default: %s)" % [params[i], defaults[params[i]]])
+			else:
+				described.append(params[i])
+		lines.append("Parameters: " + ", ".join(described))
+	if not _selection.is_empty():
+		lines.append("Wraps the selected code." if Expander.uses_selection(entry.body) else "Replaces the selected code.")
+	_info.text = "\n".join(lines)
+	_info.visible = not lines.is_empty()
+	_preview.text = Expander.get_preview(entry.body, values, _selection)
 
 func _choose(index: int) -> void:
 	var keyword = _keys[index]
