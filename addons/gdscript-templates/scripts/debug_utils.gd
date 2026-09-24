@@ -21,10 +21,10 @@ static func info(msg: String) -> void:
 
 static func warn(msg: String) -> void:
 	if ENABLE_DEBUG:
-		push_warning("[code-templates-plugin:WARN] %s" % msg)
+		push_warning("[gdscript-templates:WARN] %s" % msg)
 		print("[gdscript-templates:WARN] %s" % msg)
 
 static func error(msg: String) -> void:
 	if ENABLE_DEBUG:
-		push_error("[code-templates-plugin:ERROR] %s" % msg)
+		push_error("[gdscript-templates:ERROR] %s" % msg)
 		print("[gdscript-templates:ERROR] %s" % msg)

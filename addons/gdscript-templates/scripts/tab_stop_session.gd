@@ -2,8 +2,8 @@
 extends RefCounted
 
 # Tab stops after expansion. Tab copies the value to other occurrences of the
-# parameter and selects the next one, the last Tab jumps to |CURSOR|.
-# Ends when the caret leaves the parameter or the line count changes.
+# parameter and selects the next one, Shift+Tab the previous one, the last Tab jumps to |CURSOR|.
+# Ends when the caret leaves the parameter (the value is still copied) or the line count changes.
 
 var text_edit: TextEdit
 var active: bool = false
@@ -36,28 +36,55 @@ func start() -> void:
 	active = true
 	_current = 0
 	_select_current()
+	text_edit.caret_changed.connect(_on_caret_changed)
 
 # returns true when Tab was consumed
 func next() -> bool:
 	if not active:
 		return false
 	if not _is_caret_in_current():
-		active = false
+		_stop()
 		return false
 
 	_commit_current()
 	_current += 1
 	if _current >= _primary.size():
-		active = false
+		_stop()
 		_move_to_cursor()
 	else:
 		_select_current()
 	return true
 
+# returns true when Shift+Tab was consumed
+func previous() -> bool:
+	if not active:
+		return false
+	if not _is_caret_in_current():
+		_stop()
+		return false
+
+	_commit_current()
+	_current = maxi(_current - 1, 0)
+	_select_current()
+	return true
+
 func finish() -> void:
 	if active and _is_caret_in_current():
 		_commit_current()
+	_stop()
+
+func _stop() -> void:
 	active = false
+	if is_instance_valid(text_edit) and text_edit.caret_changed.is_connected(_on_caret_changed):
+		text_edit.caret_changed.disconnect(_on_caret_changed)
+
+# clicking or moving elsewhere ends the session, the typed value still goes to the other occurrences
+func _on_caret_changed() -> void:
+	if not active or _is_caret_in_current():
+		return
+	if is_instance_valid(text_edit) and text_edit.get_line_count() == _line_count:
+		_commit_current()
+	_stop()
 
 static func _offset_to_position(text: String, offset: int, start_line: int, start_column: int) -> Vector2i:
 	var before = text.substr(0, offset)
@@ -83,7 +110,13 @@ func _is_caret_in_current() -> bool:
 
 func _select_current() -> void:
 	var stop = _current_stop()
-	text_edit.select(stop.line, stop.column, stop.line, stop.column + stop.length)
+	if stop.length == 0:
+		# empty default value - nothing to select, just move the caret there
+		text_edit.deselect()
+		text_edit.set_caret_line(stop.line)
+		text_edit.set_caret_column(stop.column)
+	else:
+		text_edit.select(stop.line, stop.column, stop.line, stop.column + stop.length)
 	_line_count = text_edit.get_line_count()
 	_line_length = text_edit.get_line(stop.line).length()
 
@@ -97,6 +130,8 @@ func _commit_current() -> void:
 	text_edit.begin_complex_operation()
 	for other in _stops:
 		if is_same(other, stop) or other.name != stop.name:
+			continue
+		if other.length == value.length() and text_edit.get_line(other.line).substr(other.column, other.length) == value:
 			continue
 		var old_length = other.length
 		text_edit.remove_text(other.line, other.column, other.line, other.column + old_length)
