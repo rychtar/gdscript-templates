@@ -7,7 +7,6 @@ const FileUtils = preload("res://addons/gdscript-templates/scripts/file_utils.gd
 
 const PREFIX = "plugins/gdscript_templates/"
 const USE_DEFAULT_TEMPLATES = PREFIX + "use_default_templates"
-const POPUP_SIZE = PREFIX + "popup_size"
 const SHORTCUT_SHOW = PREFIX + "show_templates_shortcut"
 const SHORTCUT_EXPAND = PREFIX + "expand_template_shortcut"
 
@@ -17,16 +16,21 @@ const LEGACY_SETTINGS_PATH = "user://code_templates_settings.json"
 # used during 1.1 development
 const OLD_PREFIX = "text_editor/gdscript_templates/"
 const OLD_SHORTCUTS = ["gdscript_templates/show_templates", "gdscript_templates/expand_template"]
+# the template browser is sized to the script editor and the preview now
+const REMOVED_SETTINGS = [PREFIX + "popup_size", OLD_PREFIX + "popup_size"]
 
 static func register() -> void:
 	var settings = EditorInterface.get_editor_settings()
 
-	for name in [USE_DEFAULT_TEMPLATES, POPUP_SIZE]:
+	for name in [USE_DEFAULT_TEMPLATES]:
 		var old_name = name.replace(PREFIX, OLD_PREFIX)
 		if settings.has_setting(old_name):
 			if not settings.has_setting(name):
 				settings.set_setting(name, settings.get_setting(old_name))
 			settings.erase(old_name)
+	for name in REMOVED_SETTINGS:
+		if settings.has_setting(name):
+			settings.erase(name)
 	if settings.has_method("remove_shortcut"):
 		for path in OLD_SHORTCUTS:
 			settings.remove_shortcut(path)
@@ -37,7 +41,6 @@ static func register() -> void:
 		settings.set_setting(USE_DEFAULT_TEMPLATES, legacy.get("use_default_templates", true))
 
 	_add_setting(settings, USE_DEFAULT_TEMPLATES, true, TYPE_BOOL)
-	_add_setting(settings, POPUP_SIZE, Vector2i(900, 480), TYPE_VECTOR2I)
 
 	# separate default instance - the inspector edits the shortcut in place
 	if not settings.has_setting(SHORTCUT_SHOW):
@@ -73,7 +76,3 @@ static func create_gdscript_highlighter() -> SyntaxHighlighter:
 
 static func use_default_templates() -> bool:
 	return EditorInterface.get_editor_settings().get_setting(USE_DEFAULT_TEMPLATES)
-
-static func popup_size() -> Vector2i:
-	var base_size: Vector2i = EditorInterface.get_editor_settings().get_setting(POPUP_SIZE)
-	return Vector2i(Vector2(base_size) * EditorInterface.get_editor_scale())

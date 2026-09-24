@@ -15,6 +15,7 @@ const LEGACY_TOOL_MENU_ITEM = "GDScript Templates Settings"
 
 var store: TemplateStore
 var session: TabStopSession
+var popup: CompletionPopup
 var hooked_text_edits: Dictionary = {}
 
 func _enter_tree():
@@ -37,6 +38,7 @@ func _enter_tree():
 
 func _exit_tree():
 	remove_tool_menu_item(TOOL_MENU_ITEM)
+	_close_templates_popup()
 
 	var editor_settings = EditorInterface.get_editor_settings()
 	if editor_settings.settings_changed.is_connected(_on_editor_settings_changed):
@@ -141,12 +143,11 @@ func show_templates_popup(text_edit: TextEdit):
 	# is the initial filter and gets replaced
 	var filter = ""
 	var start_column = text_edit.get_caret_column()
-	var params = []
 	var found = _find_keyword_before_caret(text_edit)
 	if not found.is_empty():
-		filter = found.word
+		# params typed after the keyword go into the search, where they can be edited
+		filter = " ".join([found.word] + found.params)
 		start_column = found.start_column
-		params = found.params
 	else:
 		var line = text_edit.get_line(text_edit.get_caret_line())
 		var partial = RegEx.create_from_string("\\w+$").search(line.substr(0, start_column))
@@ -154,18 +155,21 @@ func show_templates_popup(text_edit: TextEdit):
 			filter = partial.get_string()
 			start_column = partial.get_start()
 
-	var popup = CompletionPopup.new()
-	popup.setup(store.templates, filter, Settings.popup_size())
-	popup.template_chosen.connect(func(keyword):
+	_close_templates_popup()
+	popup = CompletionPopup.new()
+	popup.setup(store.templates, filter)
+	popup.template_chosen.connect(func(keyword, params):
 		if is_instance_valid(text_edit):
 			insert_template(text_edit, keyword, start_column, params)
 	)
 	popup.edit_requested.connect(func(): _open_template_editor(text_edit.get_window()))
-	popup.popup_hide.connect(func():
-		if is_instance_valid(text_edit):
-			text_edit.grab_focus()
-	)
-	popup.popup_at_caret(text_edit)
+	popup.closed.connect(func(): popup = null)
+	popup.open(text_edit)
+
+func _close_templates_popup():
+	if is_instance_valid(popup):
+		popup.close(false)
+	popup = null
 
 # replaces text from start_column to the caret with the template
 func insert_template(text_edit: TextEdit, keyword: String, start_column: int, params: Array = []):

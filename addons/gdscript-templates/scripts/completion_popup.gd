@@ -1,41 +1,45 @@
 @tool
-extends PopupPanel
+extends PanelContainer
 
 # Template browser (Ctrl+Space)
+# An inline panel inside the script's text edit rather than a popup window:
+# no title bar, and no window placement problems with floating editors or multiple screens.
 
-signal template_chosen(keyword: String)
+signal template_chosen(keyword: String, params: Array)
 signal edit_requested
+signal closed
 
 const Settings = preload("res://addons/gdscript-templates/scripts/settings.gd")
 const Expander = preload("res://addons/gdscript-templates/scripts/template_expander.gd")
 
+# panel height in script lines, shrinks when the script editor is smaller
+const HEIGHT_LINES = 22
+
 var _templates: Dictionary = {}
 var _keys: Array[String] = []
+# the first word of the search filters the templates, the rest are parameter values
+var _query := ""
+var _param_count := 0
+# picked with the arrows or the mouse, kept while typing parameter values
+var _picked_keyword := ""
+
+var _text_edit: TextEdit
+# caret line when opened, the panel sits right under it
+var _anchor_line := 0
 
 var _search: LineEdit
 var _list: ItemList
 var _info: Label
 var _preview: CodeEdit
 
-func setup(templates: Dictionary, filter: String, popup_size: Vector2i) -> void:
+func setup(templates: Dictionary, filter: String) -> void:
 	_templates = templates
-	title = "GDScript Templates"
-	borderless = false
-	unresizable = false
-	size = popup_size
-
 	_build()
 	_search.text = filter
-	_refilter()
-
-	popup_hide.connect(queue_free)
 
 func _build() -> void:
 	var editor_theme = EditorInterface.get_editor_theme()
 	var scale = EditorInterface.get_editor_scale()
-	var code_font = editor_theme.get_font("source", "EditorFonts")
-	var code_font_size = editor_theme.get_font_size("source_size", "EditorFonts")
-	theme = editor_theme
 
 	var root = VBoxContainer.new()
 	add_child(root)
@@ -44,24 +48,22 @@ func _build() -> void:
 	root.add_child(top)
 
 	_search = LineEdit.new()
-	_search.placeholder_text = "Search templates..."
+	_search.placeholder_text = "Search templates... (keyword param1 param2)"
 	_search.clear_button_enabled = true
 	_search.right_icon = editor_theme.get_icon("Search", "EditorIcons")
 	_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_search.text_changed.connect(func(_text): _refilter())
+	_search.text_changed.connect(func(_text): _on_search_changed())
 	_search.text_submitted.connect(func(_text): _choose_selected())
 	_search.gui_input.connect(_on_search_gui_input)
 	top.add_child(_search)
 
-	var edit_button = Button.new()
-	edit_button.text = "Edit Templates..."
-	edit_button.icon = editor_theme.get_icon("Edit", "EditorIcons")
-	edit_button.focus_mode = Control.FOCUS_NONE
+	var edit_button = _add_button(top, "Edit Templates...", "Edit", "Open the template editor")
 	edit_button.pressed.connect(func():
-		hide()
+		close()
 		edit_requested.emit()
 	)
-	top.add_child(edit_button)
+	var close_button = _add_button(top, "", "Close", "Close (Esc)")
+	close_button.pressed.connect(close)
 
 	var split = HSplitContainer.new()
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -70,12 +72,14 @@ func _build() -> void:
 	_list = ItemList.new()
 	_list.custom_minimum_size = Vector2(220, 0) * scale
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_list.size_flags_stretch_ratio = 0.7
-	_list.add_theme_font_override("font", code_font)
-	_list.add_theme_font_size_override("font_size", code_font_size)
-	_list.item_selected.connect(_show_preview)
+	_list.size_flags_stretch_ratio = 0.5
+	# clicks select without taking the focus, typing continues in the search
+	_list.focus_mode = Control.FOCUS_NONE
+	_list.item_selected.connect(func(index):
+		_picked_keyword = _keys[index]
+		_show_preview(index)
+	)
 	_list.item_activated.connect(_choose)
-	_list.gui_input.connect(_on_list_gui_input)
 	split.add_child(_list)
 
 	var right = VBoxContainer.new()
@@ -93,8 +97,6 @@ func _build() -> void:
 	_preview.custom_minimum_size = Vector2(300, 0) * scale
 	_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_preview.syntax_highlighter = Settings.create_gdscript_highlighter()
-	_preview.add_theme_font_override("font", code_font)
-	_preview.add_theme_font_size_override("font_size", code_font_size)
 	right.add_child(_preview)
 
 	var hint = Label.new()
@@ -102,41 +104,174 @@ func _build() -> void:
 	hint.modulate.a = 0.6
 	root.add_child(hint)
 
-# opens below the caret, in the text edit's window (main or floating)
-func popup_at_caret(text_edit: TextEdit) -> void:
-	var parent_window = text_edit.get_window()
-	parent_window.add_child(self)
+func _add_button(parent: Control, text: String, icon_name: String, tooltip: String) -> Button:
+	var button = Button.new()
+	button.text = text
+	button.icon = EditorInterface.get_editor_theme().get_icon(icon_name, "EditorIcons")
+	button.flat = true
+	button.tooltip_text = tooltip
+	button.focus_mode = Control.FOCUS_NONE
+	parent.add_child(button)
+	return button
 
-	var caret_pos = text_edit.get_global_transform_with_canvas() * text_edit.get_caret_draw_pos()
-	var popup_pos = Vector2i(caret_pos) + Vector2i(0, text_edit.get_line_height() / 2)
+func _apply_style(text_edit: TextEdit) -> void:
+	var scale = EditorInterface.get_editor_scale()
+	var editor_theme = EditorInterface.get_editor_theme()
+	var style = StyleBoxFlat.new()
+	style.bg_color = _opaque_background(text_edit)
+	style.shadow_color = Color(0, 0, 0, 0.45)
+	style.shadow_size = int(10 * scale)
+	style.border_color = editor_theme.get_color("accent_color", "Editor")
+	style.border_width_left = int(3 * scale)
+	style.set_border_width(SIDE_TOP, 1)
+	style.set_border_width(SIDE_BOTTOM, 1)
+	style.set_content_margin_all(6 * scale)
+	style.set_corner_radius_all(int(3 * scale))
+	add_theme_stylebox_override("panel", style)
 
-	# keep inside the screen, or the window when popups are embedded
-	var embedded = parent_window.is_embedded() or parent_window.gui_embed_subwindows
-	var bounds = Rect2i(Vector2i.ZERO, parent_window.size) if embedded \
-		else DisplayServer.screen_get_usable_rect(parent_window.current_screen)
-	var window_origin = Vector2i.ZERO if embedded else parent_window.position
-	var abs_pos = window_origin + popup_pos
-	var margin = 20
-	abs_pos.x = clampi(abs_pos.x, bounds.position.x + margin, max(bounds.position.x + margin, bounds.end.x - size.x - margin))
-	abs_pos.y = clampi(abs_pos.y, bounds.position.y + margin, max(bounds.position.y + margin, bounds.end.y - size.y - margin))
+	# same font and zoom as the script
+	for control in [_list, _preview]:
+		control.add_theme_font_override("font", text_edit.get_theme_font("font"))
+		control.add_theme_font_size_override("font_size", text_edit.get_theme_font_size("font_size"))
+	_preview.add_theme_color_override("background_color", text_edit.get_theme_color("background_color").lerp(style.bg_color, 0.5))
 
-	popup_on_parent(Rect2i(abs_pos - window_origin, size))
-	_search.grab_focus.call_deferred()
+# solid, like a tooltip: the script editor's background_color is often transparent
+static func _opaque_background(text_edit: TextEdit) -> Color:
+	var bg = text_edit.get_theme_color("background_color")
+	if bg.a < 0.9:
+		bg = EditorInterface.get_editor_theme().get_color("base_color", "Editor")
+	bg.a = 1.0
+	return bg.lightened(0.05)
+
+# opens under the caret line, as a child of the text edit
+func open(text_edit: TextEdit) -> void:
+	_text_edit = text_edit
+	_anchor_line = text_edit.get_caret_line()
+	_apply_style(text_edit)
+	_refilter()
+
+	text_edit.add_child(self)
+	_reposition()
+	get_viewport().gui_focus_changed.connect(_on_focus_changed)
+	text_edit.visibility_changed.connect(_on_text_edit_visibility_changed)
+
+	_search.grab_focus()
 	_search.caret_column = _search.text.length()
 
+# restore_focus: give the focus back to the text edit, unless the user moved it elsewhere
+func close(restore_focus: bool = true) -> void:
+	if is_queued_for_deletion():
+		return
+	var viewport = get_viewport()
+	if viewport and viewport.gui_focus_changed.is_connected(_on_focus_changed):
+		viewport.gui_focus_changed.disconnect(_on_focus_changed)
+	if is_instance_valid(_text_edit):
+		if _text_edit.visibility_changed.is_connected(_on_text_edit_visibility_changed):
+			_text_edit.visibility_changed.disconnect(_on_text_edit_visibility_changed)
+		if restore_focus and _text_edit.is_visible_in_tree():
+			_text_edit.grab_focus()
+	closed.emit()
+	queue_free()
+
+# keys the search field doesn't handle propagate to the parent text edit,
+# stop the ones that would edit the code (Shift+Tab, Ctrl+D, ...), let editor shortcuts through
+func _gui_input(event: InputEvent) -> void:
+	if not (event is InputEventKey and event.pressed):
+		return
+	if Settings.matches_shortcut(Settings.SHORTCUT_SHOW, event):
+		accept_event()
+		close()
+	elif Settings.matches_shortcut(Settings.SHORTCUT_EXPAND, event):
+		accept_event()
+	else:
+		for action in InputMap.get_actions():
+			if action.begins_with("ui_") and event.is_action(action, true):
+				accept_event()
+				return
+
+func _on_focus_changed(control: Control) -> void:
+	if control != self and not is_ancestor_of(control):
+		close(false)
+
+# switching to another script hides the text edit
+func _on_text_edit_visibility_changed() -> void:
+	if not _text_edit.is_visible_in_tree():
+		close(false)
+
+# every frame: scrolling and resizing have no single signal to hook
+func _process(_delta: float) -> void:
+	_reposition()
+
+func _reposition() -> void:
+	if not is_instance_valid(_text_edit):
+		return
+	var edit_size = _text_edit.size
+	var line_height = _text_edit.get_line_height()
+	var left = float(_text_edit.get_total_gutter_width())
+	var right_margin = _text_edit.get_v_scroll_bar().size.x + 6.0
+	# width through the minimum size: reset_size() (needed to fit the height) would shrink it to the toolbar
+	custom_minimum_size = Vector2(
+		maxf(edit_size.x - left - right_margin, 200.0),
+		clampf(HEIGHT_LINES * line_height, 150.0, maxf(edit_size.y - line_height * 2, 150.0)))
+	size = custom_minimum_size
+
+	# bottom edge of the caret line, (-1, -1) when scrolled out of view
+	var line = clampi(_anchor_line, 0, _text_edit.get_line_count() - 1)
+	var pos = _text_edit.get_pos_at_line_column(line, 0)
+	var y: float
+	if pos.y < 0:
+		# out of view - stick to the edge the line went past
+		y = 0.0 if line < _text_edit.get_first_visible_line() else edit_size.y - size.y
+	else:
+		y = pos.y + 2.0
+		# flip above the line when there's no room below it
+		var above = pos.y - line_height - size.y - 2.0
+		if y + size.y > edit_size.y and above >= 0:
+			y = above
+	position = Vector2(left, clampf(y, 0.0, maxf(edit_size.y - size.y, 0.0)))
+
+# typing parameter values keeps the selected template, only the preview changes
+func _on_search_changed() -> void:
+	var words = _search_words()
+	var query = words[0] if words.size() > 0 else ""
+	if query != _query or words.size() - 1 != _param_count:
+		_refilter()
+	else:
+		var selected = _list.get_selected_items()
+		if selected.size() > 0:
+			_show_preview(selected[0])
+
+func _search_words() -> PackedStringArray:
+	return _search.text.split(" ", false)
+
+func _params() -> Array:
+	return Array(_search_words().slice(1))
+
 func _refilter() -> void:
-	var query = _search.text.strip_edges()
+	var words = _search_words()
+	var query = words[0] if words.size() > 0 else ""
+	if query != _query:
+		_picked_keyword = ""
+	_query = query
+	_param_count = words.size() - 1 if words.size() > 0 else 0
+
+	# templates that take all the typed values first, then by how well the keyword matches
 	var scored = []
 	for keyword in _templates:
 		var score = match_score(query, keyword, _templates[keyword].description)
 		if score >= 0:
-			scored.append([score, keyword])
-	scored.sort_custom(func(a, b): return a[0] > b[0] if a[0] != b[0] else a[1] < b[1])
+			var fits = Expander.get_params(_templates[keyword].body).size() >= _param_count
+			scored.append([1 if fits else 0, score, keyword])
+	scored.sort_custom(func(a, b):
+		if a[0] != b[0]:
+			return a[0] > b[0]
+		return a[1] > b[1] if a[1] != b[1] else a[2] < b[2]
+	)
 
 	_list.clear()
 	_keys.clear()
 	for item in scored:
-		var keyword: String = item[1]
+		var keyword: String = item[2]
 		var params = Expander.get_params(_templates[keyword].body)
 		var display = keyword
 		if not params.is_empty():
@@ -149,7 +284,7 @@ func _refilter() -> void:
 		_info.text = "No matching template."
 		_preview.text = ""
 	else:
-		_select(0)
+		_select(maxi(_keys.find(_picked_keyword), 0))
 
 # higher is better, -1 = no match
 static func match_score(query: String, keyword: String, description: String) -> int:
@@ -194,20 +329,27 @@ func _move_selection(step: int) -> void:
 	var selected = _list.get_selected_items()
 	var index = selected[0] + step if selected.size() > 0 else 0
 	_select(clampi(index, 0, _keys.size() - 1))
+	_picked_keyword = _keys[_list.get_selected_items()[0]]
 
 func _show_preview(index: int) -> void:
 	var entry = _templates[_keys[index]]
 	var info: String = entry.description
 	var params = Expander.get_params(entry.body)
+	var values = _params()
 	if not params.is_empty():
-		info += ("\n" if not info.is_empty() else "") + "Parameters: " + ", ".join(params)
+		var described = []
+		for i in params.size():
+			described.append(params[i] + (" = " + values[i] if i < values.size() else ""))
+		info += ("\n" if not info.is_empty() else "") + "Parameters: " + ", ".join(described)
 	_info.text = info
-	_preview.text = Expander.get_preview(entry.body)
+	_info.visible = not info.is_empty()
+	_preview.text = Expander.get_preview(entry.body, values)
 
 func _choose(index: int) -> void:
 	var keyword = _keys[index]
-	template_chosen.emit(keyword)
-	hide()
+	var params = _params()
+	close()
+	template_chosen.emit(keyword, params)
 
 func _choose_selected() -> void:
 	var selected = _list.get_selected_items()
@@ -228,11 +370,8 @@ func _on_search_gui_input(event: InputEvent) -> void:
 			_move_selection(10)
 		KEY_TAB:
 			_choose_selected()
+		KEY_ESCAPE:
+			close()
 		_:
 			return
 	_search.accept_event()
-
-func _on_list_gui_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and event.keycode == KEY_TAB:
-		_list.accept_event()
-		_choose_selected()

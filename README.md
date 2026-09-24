@@ -65,7 +65,6 @@ Go to **Editor → Editor Settings → Plugins → GDScript Templates**. Godot o
 shows plugin settings when **Advanced Settings** (top right) is turned on.
 
 - **Use Default Templates**: turn off to use only your own templates
-- **Popup Size**: size of the template browser
 - **Show Templates Shortcut**, **Expand Template Shortcut**: keyboard shortcuts
 
 ## Screenshots

@@ -26,8 +26,8 @@ static func get_params(body: String) -> PackedStringArray:
 			params.append(param_name)
 	return params
 
-static func get_preview(body: String) -> String:
-	return expand(body).text
+static func get_preview(body: String, values: Array = []) -> String:
+	return expand(body, values).text
 
 # returns {text, cursor, stops} - stops are params without a value: [{name, offset, length}]
 static func expand(body: String, values: Array = [], indent: String = "", indent_unit: String = "\t") -> Dictionary:
