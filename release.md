@@ -1,3 +1,21 @@
+# 1.7.1
+
+## Fixed
+- A parameter that is also a keyword (or a type like `Timer`, `Color`, `Input`) no longer replaces
+  the template: in `onready timer Timer` the keyword is `timer`, an exact match wins over a case
+  insensitive one.
+- Keywords inside `#` comments and single quoted strings are not expanded.
+- Tab stops: an empty default (`{x=}`) directly before another parameter or `|CURSOR|`
+  shifted the next stop to the wrong place (`{a=}{b}` typed as `Yb`, the caret ended before the value).
+- Changed built-in templates without a category no longer fail on Godot older than 4.5
+  (`Dictionary.merged()` is not available there).
+- The plugin no longer leaves a signal connection on script editors when it is disabled,
+  closing a script afterwards printed an error.
+- Own templates with the same keyword as a built-in one only take its category when
+  built-in templates are enabled.
+- Compiled regular expressions are reused instead of being created on every key press.
+- README: removed screenshots that no longer exist.
+
 # 1.4
 
 ## Added

@@ -323,7 +323,7 @@ func _load(keyword: String) -> void:
 		_description.text = entry.description
 		_category.text = entry.category
 		# changed before 1.4 - offer the original category
-		if entry.category.is_empty() and _defaults.has(keyword):
+		if entry.category.is_empty() and _use_defaults and _defaults.has(keyword):
 			_category.text = _defaults[keyword].category
 		_body.text = entry.body
 		_body.clear_undo_history()

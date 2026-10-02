@@ -249,7 +249,7 @@ func _reposition() -> void:
 func _on_search_changed() -> void:
 	var words = _search_words()
 	var query = words[0] if words.size() > 0 else ""
-	if query != _query or words.size() - 1 != _param_count:
+	if query != _query or maxi(words.size() - 1, 0) != _param_count:
 		_refilter()
 	else:
 		var selected = _list.get_selected_items()

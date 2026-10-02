@@ -79,10 +79,14 @@ func rebuild() -> void:
 	templates.merge(user, true)
 	templates.merge(project, true)
 	# a changed default template without a category (made before 1.4) keeps the original one
+	if not use_defaults:
+		return
 	for keyword in templates:
 		var entry = templates[keyword]
 		if entry.category.is_empty() and defaults.has(keyword):
-			templates[keyword] = entry.merged({"category": defaults[keyword].category}, true)
+			var with_category = entry.duplicate()
+			with_category.category = defaults[keyword].category
+			templates[keyword] = with_category
 
 # categories in the order of the default templates, then the others alphabetically,
 # "" (templates without a category) last
@@ -125,10 +129,12 @@ func record_use(keyword: String) -> void:
 	usage[keyword] = int(usage.get(keyword, 0)) + 1
 	FileUtils.save_json_file(usage, _get_usage_path())
 
-# case insensitive, "" when not found
-func find_keyword(word: String) -> String:
+# case insensitive unless case_sensitive, "" when not found
+func find_keyword(word: String, case_sensitive: bool = false) -> String:
 	if templates.has(word):
 		return word
+	if case_sensitive:
+		return ""
 	var word_lower = word.to_lower()
 	for keyword in templates:
 		if keyword.to_lower() == word_lower:
