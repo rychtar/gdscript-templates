@@ -7,7 +7,7 @@ extends PanelContainer
 
 signal choice_picked(index: int)
 
-const PanelStyle = preload("res://addons/gdscript-templates/scripts/panel_style.gd")
+const UiUtils = preload("res://addons/gdscript-templates/scripts/ui_utils.gd")
 
 var _text_edit: TextEdit
 # line and column of the parameter
@@ -26,8 +26,8 @@ func show_choices(text_edit: TextEdit, anchor: Vector2i, choices: PackedStringAr
 	if _text_edit != text_edit:
 		_text_edit = text_edit
 		text_edit.add_child(self)
-		add_theme_stylebox_override("panel", PanelStyle.create(text_edit))
-		PanelStyle.use_font_of(text_edit, [_list])
+		add_theme_stylebox_override("panel", UiUtils.create_panel_style(text_edit))
+		UiUtils.use_font_of(text_edit, [_list])
 	_anchor = anchor
 
 	var font := text_edit.get_theme_font("font")
@@ -59,8 +59,4 @@ func _reposition() -> void:
 	visible = pos.y >= 0
 	if not visible:
 		return
-	var y := pos.y + 2.0
-	var above := pos.y - _text_edit.get_line_height() - size.y - 2.0
-	if y + size.y > _text_edit.size.y and above >= 0:
-		y = above
-	position = Vector2(clampf(pos.x, 0.0, maxf(_text_edit.size.x - size.x, 0.0)), y)
+	position = Vector2(clampf(pos.x, 0.0, maxf(_text_edit.size.x - size.x, 0.0)), UiUtils.y_near_line(_text_edit, pos.y, size.y))

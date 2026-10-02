@@ -8,7 +8,7 @@ func test_get_params() -> void:
 
 func test_get_defaults() -> void:
 	check("first default wins, empty default",
-		Expander.get_defaults("{a=x} {a=y} {b=} {c}"), {"a": "x", "b": ""})
+		Expander.analyze("{a=x} {a=y} {b=} {c}").defaults, {"a": "x", "b": ""})
 
 func test_uses_selection() -> void:
 	check("with selection", Expander.uses_selection("if x:\n\t{selection}"), true)
@@ -78,13 +78,13 @@ func test_expand_variables() -> void:
 
 func test_get_choices() -> void:
 	check("trimmed, empty ones dropped, the first occurrence wins",
-		Expander.get_choices("{t|int, float ,,String} {t|x,y} {u} {v|}"), {"t": PackedStringArray(["int", "float", "String"])})
+		Expander.analyze("{t|int, float ,,String} {t|x,y} {u} {v|}").choices, {"t": PackedStringArray(["int", "float", "String"])})
 	check("a choice parameter is a normal parameter", Expander.get_params("{t|a,b} {u} {t}"), PackedStringArray(["t", "u"]))
 
 func test_choices_default_is_the_first_one() -> void:
-	check("default", Expander.get_defaults("{t|int,float}"), {"t": "int"})
+	check("default", Expander.analyze("{t|int,float}").defaults, {"t": "int"})
 	check("placeholder", Expander.expand("var x: {t|int,float}").text, "var x: int")
-	check("an explicit default wins", Expander.get_defaults("{t=a} {t|b,c}"), {"t": "a"})
+	check("an explicit default wins", Expander.analyze("{t=a} {t|b,c}").defaults, {"t": "a"})
 	check("empty choices are a plain parameter", Expander.expand("{t|}").text, "t")
 
 func test_choices_in_stops() -> void:

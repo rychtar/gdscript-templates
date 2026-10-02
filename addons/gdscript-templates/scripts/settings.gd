@@ -24,7 +24,8 @@ static func _add_shortcut_setting(settings: EditorSettings, name: String, keycod
 		settings.set_setting(name, _create_shortcut(keycode))
 	_add_setting(settings, name, _create_shortcut(keycode), TYPE_OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "Shortcut")
 
-static func _add_setting(settings: EditorSettings, name: String, default_value: Variant, type: int, hint: int = PROPERTY_HINT_NONE, hint_string: String = "") -> void:
+static func _add_setting(settings: EditorSettings, name: String, default_value: Variant, type: int,
+		hint: int = PROPERTY_HINT_NONE, hint_string: String = "") -> void:
 	if not settings.has_setting(name):
 		settings.set_setting(name, default_value)
 	settings.set_initial_value(name, default_value, false)
@@ -42,11 +43,6 @@ static func _create_shortcut(keycode: Key) -> Shortcut:
 static func matches_shortcut(path: String, event: InputEvent) -> bool:
 	var shortcut: Variant = EditorInterface.get_editor_settings().get_setting(path)
 	return shortcut is Shortcut and shortcut.matches_event(event)
-
-static func create_gdscript_highlighter() -> SyntaxHighlighter:
-	if ClassDB.class_exists("GDScriptSyntaxHighlighter"):
-		return ClassDB.instantiate("GDScriptSyntaxHighlighter")
-	return null
 
 static func use_default_templates() -> bool:
 	return EditorInterface.get_editor_settings().get_setting(USE_DEFAULT_TEMPLATES)

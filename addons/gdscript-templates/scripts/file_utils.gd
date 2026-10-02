@@ -1,5 +1,7 @@
 @tool
-extends Object
+extends RefCounted
+
+# Reading and writing the JSON files of the templates.
 
 const Debug = preload("res://addons/gdscript-templates/scripts/debug_utils.gd")
 

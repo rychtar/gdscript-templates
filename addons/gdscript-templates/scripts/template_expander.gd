@@ -43,41 +43,40 @@ static func split_args(text: String) -> Array[Dictionary]:
 		})
 	return args
 
-# unique parameter names in order of first appearance, without {selection}
-static func get_params(body: String) -> PackedStringArray:
+# what the body of a template has, read in one pass: {params, defaults, choices, uses_selection}
+#   params          unique parameter names in order of first appearance, without {selection}
+#   defaults        parameter name -> default value, the first default of a parameter wins,
+#                   the default of a parameter with choices is its first choice
+#   choices         parameter name -> its choices (PackedStringArray), only for {name|a,b}
+#   uses_selection  the body has {selection}
+static func analyze(body: String) -> Dictionary:
 	var params := PackedStringArray()
-	for result in _get_regex().search_all(body):
-		var param_name: String = result.get_string(1)
-		if _is_param(param_name) and not params.has(param_name):
-			params.append(param_name)
-	return params
-
-# parameter name -> default value, the first default of a parameter wins,
-# the default of a parameter with choices is the first choice
-static func get_defaults(body: String) -> Dictionary:
 	var defaults := {}
-	for result in _get_regex().search_all(body):
-		var param_name: String = result.get_string(1)
-		if not _is_param(param_name) or defaults.has(param_name):
-			continue
-		if result.get_start(2) != -1:
-			defaults[param_name] = result.get_string(2)
-		elif result.get_start(3) != -1:
-			var choices := _parse_choices(result.get_string(3))
-			if not choices.is_empty():
-				defaults[param_name] = choices[0]
-	return defaults
-
-# parameter name -> its choices, only for parameters with {name|a,b}, the first one of a parameter wins
-static func get_choices(body: String) -> Dictionary:
 	var all_choices := {}
+	var uses_selection := false
 	for result in _get_regex().search_all(body):
 		var param_name: String = result.get_string(1)
-		if _is_param(param_name) and result.get_start(3) != -1 and not all_choices.has(param_name):
-			var choices := _parse_choices(result.get_string(3))
-			if not choices.is_empty():
-				all_choices[param_name] = choices
-	return all_choices
+		if param_name == SELECTION:
+			uses_selection = true
+		if not _is_param(param_name):
+			continue
+		if not params.has(param_name):
+			params.append(param_name)
+		var choices := _parse_choices(result.get_string(3)) if result.get_start(3) != -1 else PackedStringArray()
+		if not choices.is_empty() and not all_choices.has(param_name):
+			all_choices[param_name] = choices
+		if not defaults.has(param_name):
+			if result.get_start(2) != -1:
+				defaults[param_name] = result.get_string(2)
+			elif not choices.is_empty():
+				defaults[param_name] = choices[0]
+	return {"params": params, "defaults": defaults, "choices": all_choices, "uses_selection": uses_selection}
+
+static func get_params(body: String) -> PackedStringArray:
+	return analyze(body).params
+
+static func uses_selection(body: String) -> bool:
+	return analyze(body).uses_selection
 
 # "a, b,,c" -> a, b, c
 static func _parse_choices(text: String) -> PackedStringArray:
@@ -90,9 +89,10 @@ static func _parse_choices(text: String) -> PackedStringArray:
 # each parameter as shown in the template browser and the editor: "x = 5" for a given value,
 # "x (a | b)" with choices, "x (default: 1)" with a default, "x" otherwise
 static func describe_params(body: String, values: Array = []) -> PackedStringArray:
-	var params := get_params(body)
-	var defaults := get_defaults(body)
-	var all_choices := get_choices(body)
+	var info := analyze(body)
+	var params: PackedStringArray = info.params
+	var defaults: Dictionary = info.defaults
+	var all_choices: Dictionary = info.choices
 	var described := PackedStringArray()
 	for i in params.size():
 		var param_name := params[i]
@@ -114,12 +114,6 @@ static func format_params(body: String, separator: String = " ") -> String:
 static func leading_whitespace(line: String) -> String:
 	return line.substr(0, line.length() - line.strip_edges(true, false).length())
 
-static func uses_selection(body: String) -> bool:
-	for result in _get_regex().search_all(body):
-		if result.get_string(1) == SELECTION:
-			return true
-	return false
-
 static func _is_param(param_name: String) -> bool:
 	return not param_name.is_empty() and param_name != CURSOR and param_name != SELECTION
 
@@ -130,10 +124,12 @@ static func get_preview(body: String, values: Array = [], selection: String = ""
 # cursor_order is the position of |CURSOR| among the stops (-0.5 before the first one, 0.5 between the first and the second, ...)
 # a param without a value is filled with its default (or its name) and becomes a tab stop
 # {@name} is replaced with variables[name], an unknown variable stays as it is
-static func expand(body: String, values: Array = [], indent: String = "", indent_unit: String = "\t", selection: String = "", variables: Dictionary = {}) -> Dictionary:
-	var params := get_params(body)
-	var defaults := get_defaults(body)
-	var all_choices := get_choices(body)
+static func expand(body: String, values: Array = [], indent: String = "", indent_unit: String = "\t",
+		selection: String = "", variables: Dictionary = {}) -> Dictionary:
+	var info := analyze(body)
+	var params: PackedStringArray = info.params
+	var defaults: Dictionary = info.defaults
+	var all_choices: Dictionary = info.choices
 	var source := _apply_indentation(body, indent, indent_unit)
 	# without |CURSOR| the caret ends after the text
 	if not source.contains(CURSOR_MARKER):

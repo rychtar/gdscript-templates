@@ -5,7 +5,7 @@ extends ConfirmationDialog
 
 signal templates_saved(user_templates: Dictionary, project_templates: Dictionary)
 
-const Settings = preload("res://addons/gdscript-templates/scripts/settings.gd")
+const UiUtils = preload("res://addons/gdscript-templates/scripts/ui_utils.gd")
 const TemplateStore = preload("res://addons/gdscript-templates/scripts/template_store.gd")
 const Expander = preload("res://addons/gdscript-templates/scripts/template_expander.gd")
 const Catalog = preload("res://addons/gdscript-templates/scripts/template_catalog.gd")
@@ -211,7 +211,8 @@ func _build_fields() -> Control:
 	_scope = OptionButton.new()
 	_scope.add_item(Catalog.SCOPE_NAMES[Catalog.SCOPE_ALL], Catalog.SCOPE_ALL)
 	_scope.add_item(Catalog.SCOPE_NAMES[Catalog.SCOPE_PROJECT], Catalog.SCOPE_PROJECT)
-	_scope.tooltip_text = "Project templates are saved to %s, you can commit it and share it with your team." % TemplateStore.PROJECT_PATH
+	_scope.tooltip_text = "Project templates are saved to %s, you can commit it and share it with your team." \
+		% TemplateStore.PROJECT_PATH
 	_scope.item_selected.connect(_on_scope_selected)
 	grid.add_child(_scope)
 	return grid
@@ -227,7 +228,7 @@ func _build_editors() -> Control:
 	_body.custom_minimum_size = Vector2(0, 90) * scale
 	_body.gutters_draw_line_numbers = true
 	_body.indent_use_spaces = false
-	_body.syntax_highlighter = Settings.create_gdscript_highlighter()
+	_body.syntax_highlighter = UiUtils.create_gdscript_highlighter()
 	_use_code_font(_body)
 	_body.text_changed.connect(_on_entry_changed)
 	editors.add_child(_body)
@@ -244,7 +245,7 @@ func _build_editors() -> Control:
 	_preview.context_menu_enabled = false
 	_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_preview.custom_minimum_size = Vector2(0, 60) * scale
-	_preview.syntax_highlighter = Settings.create_gdscript_highlighter()
+	_preview.syntax_highlighter = UiUtils.create_gdscript_highlighter()
 	_use_code_font(_preview)
 	preview_box.add_child(_preview)
 	return editors
@@ -254,7 +255,8 @@ func _build_help() -> Control:
 	_help_button = Button.new()
 	_help_button.text = "Template syntax"
 	var editor_theme := EditorInterface.get_editor_theme()
-	_help_button.icon = editor_theme.get_icon("NodeInfo" if editor_theme.has_icon("NodeInfo", "EditorIcons") else "Help", "EditorIcons")
+	var icon_name := "NodeInfo" if editor_theme.has_icon("NodeInfo", "EditorIcons") else "Help"
+	_help_button.icon = editor_theme.get_icon(icon_name, "EditorIcons")
 	_help_button.flat = true
 	_help_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_help_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -475,7 +477,8 @@ func _update_params_info() -> void:
 func _on_entry_changed() -> void:
 	if _updating or _selected.is_empty():
 		return
-	_catalog.set_entry(_selected, {"body": _body.text, "description": _description.text.strip_edges(), "category": _category.text.strip_edges()})
+	var entry := {"body": _body.text, "description": _description.text.strip_edges(), "category": _category.text.strip_edges()}
+	_catalog.set_entry(_selected, entry)
 	_update_state()
 
 func _on_scope_selected(index: int) -> void:
@@ -530,5 +533,6 @@ func _on_remove_pressed() -> void:
 
 func _on_custom_action(action: StringName) -> void:
 	if action == "show_file":
-		var path := TemplateStore.get_project_path() if _catalog.scope(_selected) == Catalog.SCOPE_PROJECT else TemplateStore.get_user_path()
+		var in_project := _catalog.scope(_selected) == Catalog.SCOPE_PROJECT
+		var path := TemplateStore.get_project_path() if in_project else TemplateStore.get_user_path()
 		OS.shell_show_in_file_manager(path if FileAccess.file_exists(path) else path.get_base_dir())

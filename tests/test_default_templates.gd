@@ -20,8 +20,9 @@ func test_choices_are_valid() -> void:
 	var templates := _defaults()
 	for keyword in templates:
 		var body: String = templates[keyword].body
-		var choices := Expander.get_choices(body)
-		var defaults := Expander.get_defaults(body)
+		var info := Expander.analyze(body)
+		var choices: Dictionary = info.choices
+		var defaults: Dictionary = info.defaults
 		for param in choices:
 			check("template %s: the default of %s is its first choice" % [keyword, param], defaults[param], choices[param][0])
 
@@ -34,6 +35,6 @@ func test_templates_with_choices_expand_as_before() -> void:
 
 func test_choices_in_templates() -> void:
 	var templates := _defaults()
-	check("export type", Expander.get_choices(templates.export.body).type.size() > 3, true)
-	check("return type", Expander.get_choices(templates["func"].body).return_type[0], "void")
-	check("mouse button", Expander.get_choices(templates.ims.body).button, PackedStringArray(["LEFT", "RIGHT", "MIDDLE"]))
+	check("export type", Expander.analyze(templates.export.body).choices.type.size() > 3, true)
+	check("return type", Expander.analyze(templates["func"].body).choices.return_type[0], "void")
+	check("mouse button", Expander.analyze(templates.ims.body).choices.button, PackedStringArray(["LEFT", "RIGHT", "MIDDLE"]))

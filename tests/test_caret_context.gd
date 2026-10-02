@@ -16,7 +16,7 @@ func _find(text: String) -> Dictionary:
 func test_find_keyword_with_params() -> void:
 	var found := _find("\tvec 1 \"a b\"")
 	check("keyword", found.keyword, "vec")
-	check("start", found.start_column, 1)
+	check("range", [found.from, found.to], [Vector2i(0, 1), Vector2i(0, 12)])
 	check("params", found.params, ["1", "a b"])
 	check("raw params", found.raw_params, ["1", "\"a b\""])
 
@@ -44,8 +44,9 @@ func test_ends_in_string_or_comment() -> void:
 	check("comment", CaretContext.ends_in_string_or_comment("a # b"), true)
 
 func test_word_before_caret() -> void:
-	check("word", CaretContext.word_before_caret(make_edit("x = foo")), {"text": "foo", "start_column": 4})
-	check("none", CaretContext.word_before_caret(make_edit("x = ")), {"text": "", "start_column": 4})
+	check("word", CaretContext.word_before_caret(make_edit("x = foo")), {"text": "foo", "from": Vector2i(0, 4), "to": Vector2i(0, 7)})
+	check("none", CaretContext.word_before_caret(make_edit("x = ")), {"text": "", "from": Vector2i(0, 4), "to": Vector2i(0, 4)})
+	check("on a later line", CaretContext.word_before_caret(make_edit("a\n  foo")).from, Vector2i(1, 2))
 
 func test_completion_word() -> void:
 	check("word", CaretContext.completion_word(make_edit("var a = vec")), "vec")

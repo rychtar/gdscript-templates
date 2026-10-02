@@ -12,16 +12,20 @@ static var _completion_word_regex := RegEx.create_from_string("(^|[^.$%@\\w])(\\
 static var _trailing_word_regex := RegEx.create_from_string("\\w+$")
 static var _non_space_regex := RegEx.create_from_string("\\S+")
 
+static func caret_position(text_edit: TextEdit) -> Vector2i:
+	return Vector2i(text_edit.get_caret_line(), text_edit.get_caret_column())
+
 # the line text before the caret
 static func text_before_caret(text_edit: TextEdit) -> String:
 	return text_edit.get_line(text_edit.get_caret_line()).substr(0, text_edit.get_caret_column())
 
-# the word right before the caret: {text, start_column}, "" starting at the caret when there is none
+# the word right before the caret: {text, from, to}, empty and starting at the caret when there is none
 static func word_before_caret(text_edit: TextEdit) -> Dictionary:
+	var caret := caret_position(text_edit)
 	var word := _trailing_word_regex.search(text_before_caret(text_edit))
 	if word:
-		return {"text": word.get_string(), "start_column": word.get_start()}
-	return {"text": "", "start_column": text_edit.get_caret_column()}
+		return {"text": word.get_string(), "from": Vector2i(caret.x, word.get_start()), "to": caret}
+	return {"text": "", "from": caret, "to": caret}
 
 # the word being completed, "" in strings, comments and after "." "$" "%" "@"
 static func completion_word(text_edit: CodeEdit) -> String:
@@ -34,8 +38,10 @@ static func completion_word(text_edit: CodeEdit) -> String:
 
 # finds "keyword param1 param2" before the caret, last known keyword wins
 # find_keyword(word: String, case_sensitive: bool) -> String returns the template keyword or ""
-# returns {keyword, word, start_column, params, raw_params} or {} if there is no keyword
+# returns {keyword, word, from, to, params, raw_params} or {} if there is no keyword,
+# from and to are the range of the keyword and its params, the text a template replaces
 static func find_keyword_before_caret(text_edit: TextEdit, find_keyword: Callable) -> Dictionary:
+	var caret := caret_position(text_edit)
 	var before_caret := text_before_caret(text_edit)
 	var words := _non_space_regex.search_all(before_caret)
 
@@ -51,7 +57,8 @@ static func find_keyword_before_caret(text_edit: TextEdit, find_keyword: Callabl
 			return {
 				"keyword": keyword,
 				"word": words[i].get_string(),
-				"start_column": words[i].get_start(),
+				"from": Vector2i(caret.x, words[i].get_start()),
+				"to": caret,
 				"params": params.map(func(param): return param.value),
 				# as typed, with quotes
 				"raw_params": params.map(func(param): return param.raw),
@@ -83,19 +90,12 @@ static func get_popup_target(text_edit: TextEdit, find_keyword: Callable) -> Dic
 		var selected := get_selected_range(text_edit)
 		return {"from": selected.from, "to": selected.to, "selection": selected.text, "filter": ""}
 
-	var caret := Vector2i(text_edit.get_caret_line(), text_edit.get_caret_column())
-	var from := caret
-	var filter := ""
 	var found := find_keyword_before_caret(text_edit, find_keyword)
 	if not found.is_empty():
 		# params typed after the keyword go into the search, where they can be edited
-		filter = " ".join([found.word] + found.raw_params)
-		from.y = found.start_column
-	else:
-		var word := word_before_caret(text_edit)
-		filter = word.text
-		from.y = word.start_column
-	return {"from": from, "to": caret, "selection": "", "filter": filter}
+		return {"from": found.from, "to": found.to, "selection": "", "filter": " ".join([found.word] + found.raw_params)}
+	var word := word_before_caret(text_edit)
+	return {"from": word.from, "to": word.to, "selection": "", "filter": word.text}
 
 # selection spanning more lines is extended to whole lines (without the first line's indentation),
 # returns {from, to, text} with the text dedented

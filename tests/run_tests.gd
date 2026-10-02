@@ -13,7 +13,13 @@ func _run() -> void:
 	var total := 0
 	var failed := 0
 	for file in _test_files():
-		var test = load(TESTS_DIR.path_join(file)).new()
+		var script: GDScript = load(TESTS_DIR.path_join(file))
+		if not script or not script.can_instantiate():
+			total += 1
+			failed += 1
+			print("FAIL %s: the script can't be loaded (see the errors above)" % file)
+			continue
+		var test = script.new()
 		test.tree = self
 		for method in test.get_method_list():
 			if not method.name.begins_with("test_"):

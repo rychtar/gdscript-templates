@@ -1,7 +1,9 @@
 @tool
-extends Object
+extends RefCounted
 
-# debug is enabled only for this project
+# Log messages, printed only while developing the plugin itself:
+# in the project named EXPECTED_PROJECT_NAME, or when DEBUG is true.
+
 const EXPECTED_PROJECT_NAME := "gdscript-templates"
 const DEBUG := false
 

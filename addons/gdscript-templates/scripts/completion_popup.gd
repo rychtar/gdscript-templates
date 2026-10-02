@@ -11,7 +11,7 @@ signal closed
 
 const Settings = preload("res://addons/gdscript-templates/scripts/settings.gd")
 const Expander = preload("res://addons/gdscript-templates/scripts/template_expander.gd")
-const PanelStyle = preload("res://addons/gdscript-templates/scripts/panel_style.gd")
+const UiUtils = preload("res://addons/gdscript-templates/scripts/ui_utils.gd")
 
 # panel height in script lines, shrinks when the script editor is smaller
 const HEIGHT_LINES = 22
@@ -44,7 +44,8 @@ var _list: ItemList
 var _info: Label
 var _preview: CodeEdit
 
-func setup(templates: Dictionary, filter: String, selection: String = "", usage: Dictionary = {}, categories: PackedStringArray = [], variables: Dictionary = {}) -> void:
+func setup(templates: Dictionary, filter: String, selection: String = "", usage: Dictionary = {},
+		categories: PackedStringArray = [], variables: Dictionary = {}) -> void:
 	_templates = templates
 	_selection = selection
 	_usage = usage
@@ -115,7 +116,7 @@ func _build() -> void:
 	_preview.context_menu_enabled = false
 	_preview.custom_minimum_size = Vector2(300, 0) * scale
 	_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_preview.syntax_highlighter = Settings.create_gdscript_highlighter()
+	_preview.syntax_highlighter = UiUtils.create_gdscript_highlighter()
 	right.add_child(_preview)
 
 	var hint := Label.new()
@@ -134,9 +135,9 @@ func _add_button(parent: Control, text: String, icon_name: String, tooltip: Stri
 	return button
 
 func _apply_style(text_edit: TextEdit) -> void:
-	var style := PanelStyle.create(text_edit)
+	var style := UiUtils.create_panel_style(text_edit)
 	add_theme_stylebox_override("panel", style)
-	PanelStyle.use_font_of(text_edit, [_list, _preview])
+	UiUtils.use_font_of(text_edit, [_list, _preview])
 	_preview.add_theme_color_override("background_color", text_edit.get_theme_color("background_color").lerp(style.bg_color, 0.5))
 
 # opens under the caret line, as a child of the text edit
@@ -219,11 +220,7 @@ func _reposition() -> void:
 		# out of view - stick to the edge the line went past
 		y = 0.0 if line < _text_edit.get_first_visible_line() else edit_size.y - size.y
 	else:
-		y = pos.y + 2.0
-		# flip above the line when there's no room below it
-		var above := pos.y - line_height - size.y - 2.0
-		if y + size.y > edit_size.y and above >= 0:
-			y = above
+		y = UiUtils.y_near_line(_text_edit, pos.y, size.y)
 	position = Vector2(left, clampf(y, 0.0, maxf(edit_size.y - size.y, 0.0)))
 
 # typing parameter values keeps the selected template, only the preview changes
@@ -280,15 +277,15 @@ func _add_scored(query: String) -> void:
 # keywords of the templates matching the query, the best first: templates that take all the typed values
 # (and wrap the selection) first, then by the kind of match (exact, prefix, ...), the most used,
 # how well the keyword matches
-static func rank_templates(templates: Dictionary, query: String, usage: Dictionary, param_count: int, selection: String) -> Array[String]:
+static func rank_templates(templates: Dictionary, query: String, usage: Dictionary,
+		param_count: int, selection: String) -> Array[String]:
 	var scored: Array[Array] = []
 	for keyword in templates:
 		var entry: Dictionary = templates[keyword]
 		var score := match_score(query, keyword, entry.description + "\n" + entry.category)
 		if score >= 0:
-			var fits := Expander.get_params(entry.body).size() >= param_count
-			if not selection.is_empty() and not Expander.uses_selection(entry.body):
-				fits = false
+			var info := Expander.analyze(entry.body)
+			var fits: bool = info.params.size() >= param_count and (selection.is_empty() or info.uses_selection)
 			scored.append([1 if fits else 0, match_kind(score), int(usage.get(keyword, 0)), score, keyword])
 	scored.sort_custom(func(a, b):
 		for i in 4:
