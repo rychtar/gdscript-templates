@@ -38,15 +38,21 @@ func start() -> void:
 	_select_current()
 	text_edit.caret_changed.connect(_on_caret_changed)
 
-# returns true when Tab was consumed
-func next() -> bool:
+# the caret is still in the current parameter: copies its value and returns true,
+# otherwise ends the session
+func _leave_current() -> bool:
 	if not active:
 		return false
 	if not _is_caret_in_current():
 		_stop()
 		return false
-
 	_commit_current()
+	return true
+
+# returns true when Tab was consumed
+func next() -> bool:
+	if not _leave_current():
+		return false
 	_current += 1
 	if _current >= _primary.size():
 		_stop()
@@ -57,13 +63,8 @@ func next() -> bool:
 
 # returns true when Shift+Tab was consumed
 func previous() -> bool:
-	if not active:
+	if not _leave_current():
 		return false
-	if not _is_caret_in_current():
-		_stop()
-		return false
-
-	_commit_current()
 	_current = maxi(_current - 1, 0)
 	_select_current()
 	return true

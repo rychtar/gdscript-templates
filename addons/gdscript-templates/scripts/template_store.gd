@@ -16,9 +16,6 @@ const PROJECT_PATH = "res://.gdscript_templates.json"
 # how many times each template was inserted, the browser lists the most used first
 const USAGE_FILE_NAME = "gdscript_templates_usage.json"
 
-# 1.0 user templates (per project)
-const LEGACY_USER_PATH = "user://code_templates.json"
-
 var defaults: Dictionary = {}
 var user: Dictionary = {}
 var project: Dictionary = {}
@@ -31,25 +28,22 @@ var templates: Dictionary = {}
 # modified times of the files when they were loaded, to reload them after a change
 var _loaded_times: Dictionary = {}
 
+static func _config_path(file_name: String) -> String:
+	return EditorInterface.get_editor_paths().get_config_dir().path_join(file_name)
+
 static func get_user_path() -> String:
-	return EditorInterface.get_editor_paths().get_config_dir().path_join(USER_FILE_NAME)
+	return _config_path(USER_FILE_NAME)
 
 static func get_project_path() -> String:
 	return ProjectSettings.globalize_path(PROJECT_PATH)
 
 static func _get_usage_path() -> String:
-	return EditorInterface.get_editor_paths().get_config_dir().path_join(USAGE_FILE_NAME)
+	return _config_path(USAGE_FILE_NAME)
 
 func load_templates() -> void:
 	defaults = normalize(FileUtils.load_json_file(DEFAULTS_PATH))
 
-	var user_path = get_user_path()
-	if not FileAccess.file_exists(user_path) and FileAccess.file_exists(LEGACY_USER_PATH):
-		var legacy = FileUtils.load_json_file(LEGACY_USER_PATH)
-		if not legacy.is_empty() and FileUtils.save_json_file(legacy, user_path):
-			Debug.info("✓ User templates migrated to %s" % user_path)
-
-	user = _load(user_path)
+	user = _load(get_user_path())
 	project = _load(get_project_path())
 	usage = FileUtils.load_json_file(_get_usage_path())
 	rebuild()

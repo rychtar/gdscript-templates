@@ -280,14 +280,11 @@ func _item_text(keyword: String) -> String:
 
 func _refresh_list(select_keyword: String = _selected) -> void:
 	var query = _search.text.strip_edges().to_lower()
-	var all_keys = _user.keys()
-	for keyword in _project:
-		if not _user.has(keyword):
-			all_keys.append(keyword)
+	var all_keys = {}
 	if _use_defaults:
-		for keyword in _defaults:
-			if not _is_own(keyword):
-				all_keys.append(keyword)
+		all_keys.merge(_defaults)
+	all_keys.merge(_user)
+	all_keys.merge(_project)
 
 	_keys.clear()
 	for keyword in all_keys:
@@ -423,7 +420,7 @@ func _on_keyword_changed(new_text: String) -> void:
 func _validate_keyword(keyword: String) -> String:
 	if keyword.is_empty():
 		return "Keyword can't be empty."
-	if RegEx.create_from_string("\\s").search(keyword):
+	if keyword.contains(" ") or keyword.contains("\t"):
 		return "Keyword can't contain spaces."
 	if keyword != _selected and _exists(keyword):
 		return "Template \"%s\" already exists." % keyword
@@ -440,18 +437,18 @@ func _unique_keyword(base: String) -> String:
 func _on_add_pressed() -> void:
 	var keyword = _unique_keyword("new_template")
 	_user[keyword] = {"body": "|CURSOR|", "description": "", "category": ""}
-	_search.text = ""
-	_refresh_list(keyword)
-	_keyword.grab_focus()
-	_keyword.select_all()
+	_show_new_template(keyword)
 
 func _on_duplicate_pressed() -> void:
 	if _selected.is_empty():
 		return
 	var keyword = _unique_keyword(_selected + "_copy")
 	# a copy of a project template stays in the project
-	var own = _project if _project.has(_selected) else _user
-	own[keyword] = _get_entry(_selected).duplicate()
+	_own_templates(_selected)[keyword] = _get_entry(_selected).duplicate()
+	_show_new_template(keyword)
+
+# selects the new template and puts the caret in its keyword
+func _show_new_template(keyword: String) -> void:
 	_search.text = ""
 	_refresh_list(keyword)
 	_keyword.grab_focus()

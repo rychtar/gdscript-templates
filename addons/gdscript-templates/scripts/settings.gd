@@ -3,54 +3,26 @@ extends RefCounted
 
 # Editor Settings > Plugins > GDScript Templates
 
-const FileUtils = preload("res://addons/gdscript-templates/scripts/file_utils.gd")
-
 const PREFIX = "plugins/gdscript_templates/"
 const USE_DEFAULT_TEMPLATES = PREFIX + "use_default_templates"
 const SHOW_IN_CODE_COMPLETION = PREFIX + "show_in_code_completion"
 const SHORTCUT_SHOW = PREFIX + "show_templates_shortcut"
 const SHORTCUT_EXPAND = PREFIX + "expand_template_shortcut"
 
-# 1.0 settings file
-const LEGACY_SETTINGS_PATH = "user://code_templates_settings.json"
-
-# used during 1.1 development
-const OLD_PREFIX = "text_editor/gdscript_templates/"
-const OLD_SHORTCUTS = ["gdscript_templates/show_templates", "gdscript_templates/expand_template"]
-# the template browser is sized to the script editor and the preview now
-const REMOVED_SETTINGS = [PREFIX + "popup_size", OLD_PREFIX + "popup_size"]
-
 static func register() -> void:
 	var settings = EditorInterface.get_editor_settings()
-
-	for name in [USE_DEFAULT_TEMPLATES]:
-		var old_name = name.replace(PREFIX, OLD_PREFIX)
-		if settings.has_setting(old_name):
-			if not settings.has_setting(name):
-				settings.set_setting(name, settings.get_setting(old_name))
-			settings.erase(old_name)
-	for name in REMOVED_SETTINGS:
-		if settings.has_setting(name):
-			settings.erase(name)
-	if settings.has_method("remove_shortcut"):
-		for path in OLD_SHORTCUTS:
-			settings.remove_shortcut(path)
-
-	# first run - take the value from 1.0
-	if not settings.has_setting(USE_DEFAULT_TEMPLATES):
-		var legacy = FileUtils.load_json_file(LEGACY_SETTINGS_PATH)
-		settings.set_setting(USE_DEFAULT_TEMPLATES, legacy.get("use_default_templates", true))
 
 	_add_setting(settings, USE_DEFAULT_TEMPLATES, true, TYPE_BOOL)
 	_add_setting(settings, SHOW_IN_CODE_COMPLETION, true, TYPE_BOOL)
 
-	# separate default instance - the inspector edits the shortcut in place
-	if not settings.has_setting(SHORTCUT_SHOW):
-		settings.set_setting(SHORTCUT_SHOW, _create_shortcut(KEY_SPACE))
-	_add_setting(settings, SHORTCUT_SHOW, _create_shortcut(KEY_SPACE), TYPE_OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "Shortcut")
-	if not settings.has_setting(SHORTCUT_EXPAND):
-		settings.set_setting(SHORTCUT_EXPAND, _create_shortcut(KEY_E))
-	_add_setting(settings, SHORTCUT_EXPAND, _create_shortcut(KEY_E), TYPE_OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "Shortcut")
+	_add_shortcut_setting(settings, SHORTCUT_SHOW, KEY_SPACE)
+	_add_shortcut_setting(settings, SHORTCUT_EXPAND, KEY_E)
+
+# the setting and its initial value are separate instances - the inspector edits the shortcut in place
+static func _add_shortcut_setting(settings: EditorSettings, name: String, keycode: Key) -> void:
+	if not settings.has_setting(name):
+		settings.set_setting(name, _create_shortcut(keycode))
+	_add_setting(settings, name, _create_shortcut(keycode), TYPE_OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "Shortcut")
 
 static func _add_setting(settings: EditorSettings, name: String, default_value, type: int, hint: int = PROPERTY_HINT_NONE, hint_string: String = "") -> void:
 	if not settings.has_setting(name):

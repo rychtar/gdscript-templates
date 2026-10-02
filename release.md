@@ -1,3 +1,10 @@
+# Unreleased
+
+## Changed
+- Removed the migration of settings and templates from versions 1.0 and 1.1 (old `user://code_templates*.json`
+  files, old setting names, the old "GDScript Templates Settings" menu item). Update to 1.4-1.7 first
+  if you still use one of those versions.
+
 # 1.7.1
 
 ## Fixed

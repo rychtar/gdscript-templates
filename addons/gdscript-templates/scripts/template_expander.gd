@@ -57,6 +57,14 @@ static func get_defaults(body: String) -> Dictionary:
 			defaults[param_name] = result.get_string(2)
 	return defaults
 
+# "{x} {y}" - the parameters of the template as shown in lists
+static func format_params(body: String, separator: String = " ") -> String:
+	return separator.join(Array(get_params(body)).map(func(param): return "{%s}" % param))
+
+# the tabs and spaces a line starts with
+static func leading_whitespace(line: String) -> String:
+	return line.substr(0, line.length() - line.strip_edges(true, false).length())
+
 static func uses_selection(body: String) -> bool:
 	for result in _get_regex().search_all(body):
 		if result.get_string(1) == SELECTION:
@@ -114,8 +122,7 @@ static func expand(body: String, values: Array = [], indent: String = "", indent
 
 # leading whitespace of the last line of text
 static func _line_indent(text: String) -> String:
-	var line = text.substr(text.rfind("\n") + 1)
-	return line.substr(0, line.length() - line.strip_edges(true, false).length())
+	return leading_whitespace(text.substr(text.rfind("\n") + 1))
 
 # indents all lines except the first one, empty lines stay empty
 static func _indent_lines(text: String, indent: String) -> String:
@@ -133,7 +140,7 @@ static func dedent(text: String) -> String:
 	for line in lines:
 		if line.strip_edges().is_empty():
 			continue
-		var line_indent = line.substr(0, line.length() - line.strip_edges(true, false).length())
+		var line_indent = leading_whitespace(line)
 		if first:
 			common = line_indent
 			first = false

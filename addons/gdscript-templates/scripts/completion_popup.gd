@@ -247,9 +247,7 @@ func _reposition() -> void:
 
 # typing parameter values keeps the selected template, only the preview changes
 func _on_search_changed() -> void:
-	var words = _search_words()
-	var query = words[0] if words.size() > 0 else ""
-	if query != _query or maxi(words.size() - 1, 0) != _param_count:
+	if _search_query() != _query or _params().size() != _param_count:
 		_refilter()
 	else:
 		var selected = _list.get_selected_items()
@@ -259,21 +257,29 @@ func _on_search_changed() -> void:
 func _search_words() -> PackedStringArray:
 	return PackedStringArray(Expander.split_args(_search.text).map(func(word): return word.value))
 
+# the first word of the search
+func _search_query() -> String:
+	var words = _search_words()
+	return words[0] if words.size() > 0 else ""
+
+# the words after the first one
 func _params() -> Array:
 	return Array(_search_words().slice(1))
 
+# nothing typed - all templates by category
+func _is_grouped() -> bool:
+	return _query.is_empty() and _selection.is_empty()
+
 func _refilter() -> void:
-	var words = _search_words()
-	var query = words[0] if words.size() > 0 else ""
+	var query = _search_query()
 	if query != _query:
 		_picked_keyword = ""
 	_query = query
-	_param_count = words.size() - 1 if words.size() > 0 else 0
+	_param_count = _params().size()
 
 	_list.clear()
 	_keys.clear()
-	# nothing typed - all templates by category
-	if query.is_empty() and _selection.is_empty():
+	if _is_grouped():
 		_add_grouped()
 	else:
 		_add_scored(query)
@@ -331,13 +337,11 @@ func _add_header(text: String) -> void:
 
 func _add_template(keyword: String) -> void:
 	var entry = _templates[keyword]
-	var params = Expander.get_params(entry.body)
-	var display = keyword
-	if not params.is_empty():
-		display += "  " + " ".join(Array(params).map(func(p): return "{%s}" % p))
+	var params = Expander.format_params(entry.body)
+	var display = keyword + ("  " + params if not params.is_empty() else "")
 	_keys.append(keyword)
 	# indented under the category header
-	var index = _list.add_item(("   " if _query.is_empty() and _selection.is_empty() else "") + display)
+	var index = _list.add_item(("   " if _is_grouped() else "") + display)
 	var tooltip = entry.description
 	if not entry.category.is_empty():
 		tooltip += ("\n" if not tooltip.is_empty() else "") + "Category: " + entry.category
