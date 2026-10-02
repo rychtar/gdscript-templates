@@ -1,22 +1,14 @@
 @tool
 extends ConfirmationDialog
 
-# Template editor. A changed default template is saved as a user template
-# with the same keyword, Revert removes it. User templates are available in all projects
-# or only in this one (project templates).
+# Template editor, the templates and the rules for changing them are in template_catalog.gd.
 
 signal templates_saved(user_templates: Dictionary, project_templates: Dictionary)
 
 const Settings = preload("res://addons/gdscript-templates/scripts/settings.gd")
 const TemplateStore = preload("res://addons/gdscript-templates/scripts/template_store.gd")
 const Expander = preload("res://addons/gdscript-templates/scripts/template_expander.gd")
-
-const KIND_DEFAULT = "default"
-const KIND_MODIFIED = "modified"
-const KIND_CUSTOM = "custom"
-
-const SCOPE_ALL = 0
-const SCOPE_PROJECT = 1
+const Catalog = preload("res://addons/gdscript-templates/scripts/template_catalog.gd")
 
 # size of the dialog at the editor scale 1
 const DIALOG_SIZE = Vector2(920, 520)
@@ -24,14 +16,8 @@ const DIALOG_SIZE = Vector2(920, 520)
 # shown in the preview of templates with {selection}
 const SAMPLE_SELECTION = "# selected code"
 
-var _defaults: Dictionary = {}
-var _user: Dictionary = {}
-var _project: Dictionary = {}
-# templates when opened, to detect unsaved changes
-var _saved_user: Dictionary = {}
-var _saved_project: Dictionary = {}
+var _catalog: Catalog
 var _confirm_discard: bool = false
-var _use_defaults: bool = true
 # values of {@name} in the preview
 var _variables: Dictionary = {}
 var _keys: Array[String] = []
@@ -59,12 +45,7 @@ var _preview: CodeEdit
 var _params_info: Label
 
 func setup(defaults: Dictionary, user: Dictionary, project: Dictionary, use_defaults: bool, variables: Dictionary = {}) -> void:
-	_defaults = defaults
-	_user = user.duplicate(true)
-	_project = project.duplicate(true)
-	_saved_user = user.duplicate(true)
-	_saved_project = project.duplicate(true)
-	_use_defaults = use_defaults
+	_catalog = Catalog.new(defaults, user, project, use_defaults)
 	_variables = variables
 
 	title = "GDScript Templates"
@@ -74,10 +55,10 @@ func setup(defaults: Dictionary, user: Dictionary, project: Dictionary, use_defa
 	_build()
 	_refresh_list()
 
-	confirmed.connect(func(): templates_saved.emit(_user, _project))
+	confirmed.connect(func(): templates_saved.emit(_catalog.user, _catalog.project))
 	custom_action.connect(_on_custom_action)
 	# Cancel, Esc and the close button all emit canceled before the dialog hides
-	canceled.connect(func(): _confirm_discard = _user != _saved_user or _project != _saved_project)
+	canceled.connect(func(): _confirm_discard = _catalog.has_changes())
 	visibility_changed.connect(func():
 		if visible:
 			return
@@ -107,7 +88,7 @@ func _ask_to_save() -> void:
 	ask.cancel_button_text = "Keep Editing"
 	ask.add_button("Discard", true, "discard")
 	ask.confirmed.connect(func():
-		templates_saved.emit(_user, _project)
+		templates_saved.emit(_catalog.user, _catalog.project)
 		queue_free()
 	)
 	ask.custom_action.connect(func(_action):
@@ -156,7 +137,7 @@ func _build_list_panel() -> Control:
 	_search.text_changed.connect(func(_text): _refresh_list())
 	left.add_child(_search)
 
-	if not _use_defaults:
+	if not _catalog.use_defaults:
 		var defaults_off := Label.new()
 		defaults_off.text = "Default templates are disabled in Editor Settings."
 		defaults_off.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -228,8 +209,8 @@ func _build_fields() -> Control:
 
 	grid.add_child(_create_label("Available in"))
 	_scope = OptionButton.new()
-	_scope.add_item("All projects", SCOPE_ALL)
-	_scope.add_item("This project only", SCOPE_PROJECT)
+	_scope.add_item(Catalog.SCOPE_NAMES[Catalog.SCOPE_ALL], Catalog.SCOPE_ALL)
+	_scope.add_item(Catalog.SCOPE_NAMES[Catalog.SCOPE_PROJECT], Catalog.SCOPE_PROJECT)
 	_scope.tooltip_text = "Project templates are saved to %s, you can commit it and share it with your team." % TemplateStore.PROJECT_PATH
 	_scope.item_selected.connect(_on_scope_selected)
 	grid.add_child(_scope)
@@ -368,52 +349,19 @@ func _create_label(text: String) -> Label:
 	label.text = text
 	return label
 
-# user or project template (a new one, or a changed default)
-func _is_own(keyword: String) -> bool:
-	return _user.has(keyword) or _project.has(keyword)
-
-# where the template is saved - project templates override user ones
-func _own_templates(keyword: String) -> Dictionary:
-	return _project if _project.has(keyword) else _user
-
-func _exists(keyword: String) -> bool:
-	return _is_own(keyword) or (_use_defaults and _defaults.has(keyword))
-
-func _kind(keyword: String) -> String:
-	var is_default := _use_defaults and _defaults.has(keyword)
-	if not _is_own(keyword):
-		return KIND_DEFAULT
-	return KIND_MODIFIED if is_default else KIND_CUSTOM
-
-func _get_entry(keyword: String) -> Dictionary:
-	return _own_templates(keyword)[keyword] if _is_own(keyword) else _defaults[keyword]
-
 func _item_text(keyword: String) -> String:
 	var tags := PackedStringArray()
-	match _kind(keyword):
-		KIND_MODIFIED:
+	match _catalog.kind(keyword):
+		Catalog.KIND_MODIFIED:
 			tags.append("modified")
-		KIND_CUSTOM:
+		Catalog.KIND_CUSTOM:
 			tags.append("custom")
-	if _project.has(keyword):
+	if _catalog.scope(keyword) == Catalog.SCOPE_PROJECT:
 		tags.append("project")
 	return keyword + ("   (%s)" % ", ".join(tags) if not tags.is_empty() else "")
 
 func _refresh_list(select_keyword: String = _selected) -> void:
-	var query := _search.text.strip_edges().to_lower()
-	var all_keys := {}
-	if _use_defaults:
-		all_keys.merge(_defaults)
-	all_keys.merge(_user)
-	all_keys.merge(_project)
-
-	_keys.clear()
-	for keyword in all_keys:
-		var entry := _get_entry(keyword)
-		if query.is_empty() or keyword.to_lower().contains(query) or entry.description.to_lower().contains(query) \
-				or entry.category.to_lower().contains(query):
-			_keys.append(keyword)
-	_keys.sort()
+	_keys = _catalog.keywords(_search.text)
 
 	_list.clear()
 	for keyword in _keys:
@@ -440,13 +388,10 @@ func _load(keyword: String) -> void:
 		_category.text = ""
 		_body.text = ""
 	else:
-		var entry := _get_entry(keyword)
+		var entry := _catalog.editing_entry(keyword)
 		_keyword.text = keyword
 		_description.text = entry.description
 		_category.text = entry.category
-		# changed before 1.4 - offer the original category
-		if entry.category.is_empty() and _use_defaults and _defaults.has(keyword):
-			_category.text = _defaults[keyword].category
 		_body.text = entry.body
 		_body.clear_undo_history()
 
@@ -455,19 +400,19 @@ func _load(keyword: String) -> void:
 
 func _update_state() -> void:
 	var has_selection := not _selected.is_empty()
-	var kind := _kind(_selected) if has_selection else ""
+	var kind := _catalog.kind(_selected) if has_selection else ""
 	# nothing selected (no match, no templates): the fields stay, empty and locked
-	_keyword.editable = kind == KIND_CUSTOM
+	_keyword.editable = kind == Catalog.KIND_CUSTOM
 	_description.editable = has_selection
 	_category.editable = has_selection
 	_category_menu.disabled = not has_selection
 	_body.editable = has_selection
 	match kind:
-		KIND_DEFAULT:
+		Catalog.KIND_DEFAULT:
 			_status.text = "Default template - your changes are saved as your own version."
-		KIND_MODIFIED:
+		Catalog.KIND_MODIFIED:
 			_status.text = "Modified default template - use Revert to restore the original."
-		KIND_CUSTOM:
+		Catalog.KIND_CUSTOM:
 			_status.text = "Custom template."
 		_:
 			var query := _search.text.strip_edges()
@@ -476,14 +421,14 @@ func _update_state() -> void:
 	_highlight_add_button(not has_selection)
 
 	# a default template gets a scope when it's changed
-	_scope.disabled = kind == KIND_DEFAULT or not has_selection
-	_scope.select(SCOPE_PROJECT if _project.has(_selected) else SCOPE_ALL)
+	_scope.disabled = kind == Catalog.KIND_DEFAULT or not has_selection
+	_scope.select(_catalog.scope(_selected))
 	_update_params_info()
 
-	var is_modified := kind == KIND_MODIFIED
+	var is_modified := kind == Catalog.KIND_MODIFIED
 	_remove_button.text = "Revert" if is_modified else "Delete"
 	_remove_button.icon = EditorInterface.get_editor_theme().get_icon("Reload" if is_modified else "Remove", "EditorIcons")
-	_remove_button.disabled = kind != KIND_MODIFIED and kind != KIND_CUSTOM
+	_remove_button.disabled = kind != Catalog.KIND_MODIFIED and kind != Catalog.KIND_CUSTOM
 	_duplicate_button.disabled = _selected.is_empty()
 
 	var index := _keys.find(_selected)
@@ -513,15 +458,9 @@ func _highlight_add_button(on: bool) -> void:
 		_add_button.add_theme_stylebox_override(state, style)
 
 func _fill_category_menu() -> void:
-	var categories := PackedStringArray()
-	for templates in [_defaults, _user, _project]:
-		for keyword in templates:
-			var category: String = templates[keyword].category
-			if not category.is_empty() and not categories.has(category):
-				categories.append(category)
 	var menu := _category_menu.get_popup()
 	menu.clear()
-	for category in categories:
+	for category in _catalog.categories():
 		menu.add_item(category)
 
 func _update_params_info() -> void:
@@ -536,77 +475,39 @@ func _update_params_info() -> void:
 func _on_entry_changed() -> void:
 	if _updating or _selected.is_empty():
 		return
-	var entry := {"body": _body.text, "description": _description.text.strip_edges(), "category": _category.text.strip_edges()}
-	var own := _own_templates(_selected)
-	if _use_defaults and _defaults.has(_selected) and _defaults[_selected] == entry:
-		own.erase(_selected)
-	else:
-		own[_selected] = entry
+	_catalog.set_entry(_selected, {"body": _body.text, "description": _description.text.strip_edges(), "category": _category.text.strip_edges()})
 	_update_state()
 
 func _on_scope_selected(index: int) -> void:
-	if _updating or not _is_own(_selected):
+	if _updating or not _catalog.is_own(_selected):
 		return
-	var from := _own_templates(_selected)
-	var to := _project if _scope.get_item_id(index) == SCOPE_PROJECT else _user
-	if is_same(from, to):
-		return
-	# don't overwrite the template that is already there
-	if to.has(_selected):
-		_set_keyword_error("\"%s\" already exists in \"%s\"." % [_selected, _scope.get_item_text(index)])
-		_scope.select(SCOPE_PROJECT if is_same(from, _project) else SCOPE_ALL)
-		return
-	_set_keyword_error("")
-	to[_selected] = from[_selected]
-	from.erase(_selected)
-	_update_state()
+	var error := _catalog.move_to_scope(_selected, _scope.get_item_id(index))
+	_set_keyword_error(error)
+	if error.is_empty():
+		_update_state()
+	else:
+		_scope.select(_catalog.scope(_selected))
 
 func _on_keyword_changed(new_text: String) -> void:
 	if _updating or _selected.is_empty():
 		return
 	var keyword := new_text.strip_edges()
-	var error := _validate_keyword(keyword)
+	var error := _catalog.validate_keyword(keyword, _selected)
 	_set_keyword_error(error)
 	if not error.is_empty() or keyword == _selected:
 		return
 
-	var own := _own_templates(_selected)
-	var entry: Dictionary = own[_selected]
-	own.erase(_selected)
-	own[keyword] = entry
+	_catalog.rename(_selected, keyword)
 	_keys[_keys.find(_selected)] = keyword
 	_selected = keyword
 	_update_state()
 
-func _validate_keyword(keyword: String) -> String:
-	if keyword.is_empty():
-		return "Keyword can't be empty."
-	if keyword.contains(" ") or keyword.contains("\t"):
-		return "Keyword can't contain spaces."
-	if keyword != _selected and _exists(keyword):
-		return "Template \"%s\" already exists." % keyword
-	return ""
-
-func _unique_keyword(base: String) -> String:
-	if not _exists(base):
-		return base
-	var i := 2
-	while _exists("%s_%d" % [base, i]):
-		i += 1
-	return "%s_%d" % [base, i]
-
 func _on_add_pressed() -> void:
-	var keyword := _unique_keyword("new_template")
-	_user[keyword] = {"body": "|CURSOR|", "description": "", "category": ""}
-	_show_new_template(keyword)
+	_show_new_template(_catalog.add())
 
 func _on_duplicate_pressed() -> void:
-	if _selected.is_empty():
-		return
-	var keyword := _unique_keyword(_selected + "_copy")
-	# a copy of a project template stays in the project
-	_own_templates(_selected)[keyword] = _get_entry(_selected).duplicate()
-	_show_new_template(keyword)
+	if not _selected.is_empty():
+		_show_new_template(_catalog.duplicate(_selected))
 
 # selects the new template and puts the caret in its keyword
 func _show_new_template(keyword: String) -> void:
@@ -616,12 +517,12 @@ func _show_new_template(keyword: String) -> void:
 	_keyword.select_all()
 
 func _on_remove_pressed() -> void:
-	if not _is_own(_selected):
+	if not _catalog.is_own(_selected):
 		return
 	var index := _keys.find(_selected)
-	_own_templates(_selected).erase(_selected)
+	_catalog.remove(_selected)
 	# a reverted default, or a user template that was overridden by a project one
-	if _exists(_selected):
+	if _catalog.exists(_selected):
 		_refresh_list(_selected)
 	else:
 		_keys.remove_at(index)
@@ -629,5 +530,5 @@ func _on_remove_pressed() -> void:
 
 func _on_custom_action(action: StringName) -> void:
 	if action == "show_file":
-		var path := TemplateStore.get_project_path() if _project.has(_selected) else TemplateStore.get_user_path()
+		var path := TemplateStore.get_project_path() if _catalog.scope(_selected) == Catalog.SCOPE_PROJECT else TemplateStore.get_user_path()
 		OS.shell_show_in_file_manager(path if FileAccess.file_exists(path) else path.get_base_dir())
