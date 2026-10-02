@@ -45,6 +45,13 @@ func test_expand_cursor() -> void:
 	check("cursor", result.cursor, 2)
 	check("no cursor - at the end", Expander.expand("abc").cursor, 3)
 
+func test_expand_cursor_order() -> void:
+	check("after the text, behind all stops", Expander.expand("{a} {b}").cursor_order, 1.5)
+	check("before the first stop", Expander.expand("|CURSOR|{a}").cursor_order, -0.5)
+	check("between stops", Expander.expand("{a}|CURSOR|{b}").cursor_order, 0.5)
+	check("the first |CURSOR| wins", Expander.expand("a|CURSOR|b|CURSOR|c").cursor, 1)
+	check("a filled parameter is not a stop", Expander.expand("{a}|CURSOR|", ["x"]).cursor_order, -0.5)
+
 func test_expand_indentation() -> void:
 	check("tabs become the indent unit, following lines get the indent",
 		Expander.expand("a\n\tb", [], "\t", "    ").text, "a\n\t    b")

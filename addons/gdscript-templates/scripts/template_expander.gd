@@ -9,6 +9,7 @@ extends RefCounted
 #   \t              one indent level (converted to spaces if needed)
 
 const CURSOR = "CURSOR"
+const CURSOR_MARKER = "|CURSOR|"
 const SELECTION = "selection"
 const PLACEHOLDER_PATTERN = "\\|CURSOR\\||\\{([A-Za-z_][A-Za-z0-9_]*)(?:=([^{}\\n]*))?\\}"
 
@@ -84,6 +85,9 @@ static func expand(body: String, values: Array = [], indent: String = "", indent
 	var params = get_params(body)
 	var defaults = get_defaults(body)
 	var source = _apply_indentation(body, indent, indent_unit)
+	# without |CURSOR| the caret ends after the text
+	if not source.contains(CURSOR_MARKER):
+		source += CURSOR_MARKER
 
 	var text = ""
 	var stops: Array[Dictionary] = []
@@ -114,9 +118,6 @@ static func expand(body: String, values: Array = [], indent: String = "", indent
 			text += placeholder
 
 	text += source.substr(last_end)
-	if cursor == -1:
-		cursor = text.length()
-		cursor_order = stops.size() - 0.5
 
 	return {"text": text, "stops": stops, "cursor": cursor, "cursor_order": cursor_order}
 

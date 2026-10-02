@@ -396,6 +396,12 @@ func _on_scope_selected(index: int) -> void:
 	var to = _project if _scope.get_item_id(index) == SCOPE_PROJECT else _user
 	if is_same(from, to):
 		return
+	# don't overwrite the template that is already there
+	if to.has(_selected):
+		_keyword_error.text = "\"%s\" already exists in \"%s\"." % [_selected, _scope.get_item_text(index)]
+		_scope.select(SCOPE_PROJECT if is_same(from, _project) else SCOPE_ALL)
+		return
+	_keyword_error.text = ""
 	to[_selected] = from[_selected]
 	from.erase(_selected)
 	_update_state()
