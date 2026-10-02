@@ -99,6 +99,17 @@ shows plugin settings when **Advanced Settings** (top right) is turned on.
 editor. On macOS it is also used to switch keyboard languages, so it may not reach
 Godot at all. If either is a problem, set a different **Show Templates Shortcut**.
 
+## Tests
+
+Run from the project folder (needs Godot 4.5+, no other dependencies):
+
+```
+godot --headless --path . --script tests/run_tests.gd
+```
+
+Every `tests/test_*.gd` file is a test file, every method starting with `test_` is a test.
+The exit code is 1 when a test fails.
+
 ## License
 
 MIT
