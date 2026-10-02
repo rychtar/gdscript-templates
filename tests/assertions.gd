@@ -6,7 +6,7 @@ var tree: SceneTree
 var failures: Array[String] = []
 var _nodes: Array[Node] = []
 
-func check(description: String, got, expected) -> void:
+func check(description: String, got: Variant, expected: Variant) -> void:
 	if typeof(got) != typeof(expected) or got != expected:
 		failures.append("%s\ngot:      %s\nexpected: %s" % [description, var_to_str(got), var_to_str(expected)])
 

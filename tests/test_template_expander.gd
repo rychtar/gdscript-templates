@@ -25,7 +25,7 @@ func test_leading_whitespace() -> void:
 	check("only whitespace", Expander.leading_whitespace("  "), "  ")
 
 func test_split_args() -> void:
-	var args = Expander.split_args("a \"b c\" d")
+	var args := Expander.split_args("a \"b c\" d")
 	check("values", args.map(func(arg): return arg.value), ["a", "b c", "d"])
 	check("raw keeps quotes", args.map(func(arg): return arg.raw), ["a", "\"b c\"", "d"])
 	check("unclosed quote runs to the end", Expander.split_args("a \"b c").map(func(arg): return arg.value), ["a", "b c"])
@@ -35,12 +35,12 @@ func test_expand_values_and_defaults() -> void:
 	check("name when there is no default", Expander.expand("f({x})").text, "f(x)")
 
 func test_expand_stops() -> void:
-	var result = Expander.expand("{a} {b=1} {a}", ["x"])
+	var result := Expander.expand("{a} {b=1} {a}", ["x"])
 	check("stops are params without a value", result.stops.map(func(stop): return stop.name), ["b"])
 	check("stop offset and length", [result.stops[0].offset, result.stops[0].length], [2, 1])
 
 func test_expand_cursor() -> void:
-	var result = Expander.expand("a |CURSOR| b")
+	var result := Expander.expand("a |CURSOR| b")
 	check("text", result.text, "a  b")
 	check("cursor", result.cursor, 2)
 	check("no cursor - at the end", Expander.expand("abc").cursor, 3)
@@ -65,7 +65,7 @@ func test_dedent() -> void:
 	check("partly shared", Expander.dedent("  a\n b"), " a\nb")
 
 func test_expand_variables() -> void:
-	var variables = {"filename": "player", "class": "Player"}
+	var variables := {"filename": "player", "class": "Player"}
 	check("replaced", Expander.expand("class_name {@class} # {@filename}.gd", [], "", "\t", "", variables).text,
 		"class_name Player # player.gd")
 	check("unknown stays as it is", Expander.expand("{@nope}", [], "", "\t", "", variables).text, "{@nope}")

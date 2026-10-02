@@ -53,13 +53,13 @@ func setup(templates: Dictionary, filter: String, selection: String = "", usage:
 	_search.text = filter
 
 func _build() -> void:
-	var editor_theme = EditorInterface.get_editor_theme()
-	var scale = EditorInterface.get_editor_scale()
+	var editor_theme := EditorInterface.get_editor_theme()
+	var scale := EditorInterface.get_editor_scale()
 
-	var root = VBoxContainer.new()
+	var root := VBoxContainer.new()
 	add_child(root)
 
-	var top = HBoxContainer.new()
+	var top := HBoxContainer.new()
 	root.add_child(top)
 
 	_search = LineEdit.new()
@@ -72,15 +72,15 @@ func _build() -> void:
 	_search.gui_input.connect(_on_search_gui_input)
 	top.add_child(_search)
 
-	var edit_button = _add_button(top, "Edit Templates...", "Edit", "Open the template editor")
+	var edit_button := _add_button(top, "Edit Templates...", "Edit", "Open the template editor")
 	edit_button.pressed.connect(func():
 		close()
 		edit_requested.emit()
 	)
-	var close_button = _add_button(top, "", "Close", "Close (Esc)")
+	var close_button := _add_button(top, "", "Close", "Close (Esc)")
 	close_button.pressed.connect(close)
 
-	var split = HSplitContainer.new()
+	var split := HSplitContainer.new()
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(split)
 
@@ -100,7 +100,7 @@ func _build() -> void:
 	)
 	split.add_child(_list)
 
-	var right = VBoxContainer.new()
+	var right := VBoxContainer.new()
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	split.add_child(right)
 
@@ -117,13 +117,13 @@ func _build() -> void:
 	_preview.syntax_highlighter = Settings.create_gdscript_highlighter()
 	right.add_child(_preview)
 
-	var hint = Label.new()
+	var hint := Label.new()
 	hint.text = "Enter / Tab: insert     ↑ ↓: select     Esc: close"
 	hint.modulate.a = 0.6
 	root.add_child(hint)
 
 func _add_button(parent: Control, text: String, icon_name: String, tooltip: String) -> Button:
-	var button = Button.new()
+	var button := Button.new()
 	button.text = text
 	button.icon = EditorInterface.get_editor_theme().get_icon(icon_name, "EditorIcons")
 	button.flat = true
@@ -133,9 +133,9 @@ func _add_button(parent: Control, text: String, icon_name: String, tooltip: Stri
 	return button
 
 func _apply_style(text_edit: TextEdit) -> void:
-	var scale = EditorInterface.get_editor_scale()
-	var editor_theme = EditorInterface.get_editor_theme()
-	var style = StyleBoxFlat.new()
+	var scale := EditorInterface.get_editor_scale()
+	var editor_theme := EditorInterface.get_editor_theme()
+	var style := StyleBoxFlat.new()
 	style.bg_color = _opaque_background(text_edit)
 	style.shadow_color = Color(0, 0, 0, 0.45)
 	style.shadow_size = int(10 * scale)
@@ -155,7 +155,7 @@ func _apply_style(text_edit: TextEdit) -> void:
 
 # solid, like a tooltip: the script editor's background_color is often transparent
 static func _opaque_background(text_edit: TextEdit) -> Color:
-	var bg = text_edit.get_theme_color("background_color")
+	var bg := text_edit.get_theme_color("background_color")
 	if bg.a < 0.9:
 		bg = EditorInterface.get_editor_theme().get_color("base_color", "Editor")
 	bg.a = 1.0
@@ -180,7 +180,7 @@ func open(text_edit: TextEdit) -> void:
 func close(restore_focus: bool = true) -> void:
 	if is_queued_for_deletion():
 		return
-	var viewport = get_viewport()
+	var viewport := get_viewport()
 	if viewport and viewport.gui_focus_changed.is_connected(_on_focus_changed):
 		viewport.gui_focus_changed.disconnect(_on_focus_changed)
 	if is_instance_valid(_text_edit):
@@ -223,10 +223,10 @@ func _process(_delta: float) -> void:
 func _reposition() -> void:
 	if not is_instance_valid(_text_edit):
 		return
-	var edit_size = _text_edit.size
-	var line_height = _text_edit.get_line_height()
-	var left = float(_text_edit.get_total_gutter_width())
-	var right_margin = _text_edit.get_v_scroll_bar().size.x + 6.0
+	var edit_size := _text_edit.size
+	var line_height := _text_edit.get_line_height()
+	var left := float(_text_edit.get_total_gutter_width())
+	var right_margin := _text_edit.get_v_scroll_bar().size.x + 6.0
 	# width through the minimum size: reset_size() (needed to fit the height) would shrink it to the toolbar
 	custom_minimum_size = Vector2(
 		maxf(edit_size.x - left - right_margin, 200.0),
@@ -234,8 +234,8 @@ func _reposition() -> void:
 	size = custom_minimum_size
 
 	# bottom edge of the caret line, (-1, -1) when scrolled out of view
-	var line = clampi(_anchor_line, 0, _text_edit.get_line_count() - 1)
-	var pos = _text_edit.get_pos_at_line_column(line, 0)
+	var line := clampi(_anchor_line, 0, _text_edit.get_line_count() - 1)
+	var pos := _text_edit.get_pos_at_line_column(line, 0)
 	var y: float
 	if pos.y < 0:
 		# out of view - stick to the edge the line went past
@@ -243,7 +243,7 @@ func _reposition() -> void:
 	else:
 		y = pos.y + 2.0
 		# flip above the line when there's no room below it
-		var above = pos.y - line_height - size.y - 2.0
+		var above := pos.y - line_height - size.y - 2.0
 		if y + size.y > edit_size.y and above >= 0:
 			y = above
 	position = Vector2(left, clampf(y, 0.0, maxf(edit_size.y - size.y, 0.0)))
@@ -253,7 +253,7 @@ func _on_search_changed() -> void:
 	if _search_query() != _query or _params().size() != _param_count:
 		_refilter()
 	else:
-		var selected = _list.get_selected_items()
+		var selected := _list.get_selected_items()
 		if selected.size() > 0:
 			_show_preview(selected[0])
 
@@ -262,7 +262,7 @@ func _search_words() -> PackedStringArray:
 
 # the first word of the search
 func _search_query() -> String:
-	var words = _search_words()
+	var words := _search_words()
 	return words[0] if words.size() > 0 else ""
 
 # the words after the first one
@@ -274,7 +274,7 @@ func _is_grouped() -> bool:
 	return _query.is_empty() and _selection.is_empty()
 
 func _refilter() -> void:
-	var query = _search_query()
+	var query := _search_query()
 	if query != _query:
 		_picked_keyword = ""
 	_query = query
@@ -292,18 +292,18 @@ func _refilter() -> void:
 		_info.visible = true
 		_preview.text = ""
 	else:
-		var index = _keys.find(_picked_keyword) if not _picked_keyword.is_empty() else -1
+		var index := _keys.find(_picked_keyword) if not _picked_keyword.is_empty() else -1
 		_select(index if index != -1 else _next_item(0, 1))
 
 # templates that take all the typed values (and wrap the selection) first,
 # then by the kind of match (exact, prefix, ...), the most used, how well the keyword matches
 func _add_scored(query: String) -> void:
-	var scored = []
+	var scored: Array[Array] = []
 	for keyword in _templates:
-		var entry = _templates[keyword]
-		var score = match_score(query, keyword, entry.description + "\n" + entry.category)
+		var entry: Dictionary = _templates[keyword]
+		var score := match_score(query, keyword, entry.description + "\n" + entry.category)
 		if score >= 0:
-			var fits = Expander.get_params(entry.body).size() >= _param_count
+			var fits := Expander.get_params(entry.body).size() >= _param_count
 			if not _selection.is_empty() and not Expander.uses_selection(entry.body):
 				fits = false
 			scored.append([1 if fits else 0, match_kind(score), int(_usage.get(keyword, 0)), score, keyword])
@@ -317,7 +317,7 @@ func _add_scored(query: String) -> void:
 		_add_template(item[4])
 
 func _add_grouped() -> void:
-	var used = _usage.keys().filter(func(keyword): return _templates.has(keyword) and int(_usage[keyword]) > 0)
+	var used := _usage.keys().filter(func(keyword): return _templates.has(keyword) and int(_usage[keyword]) > 0)
 	used.sort_custom(func(a, b): return int(_usage[a]) > int(_usage[b]))
 	if not used.is_empty():
 		_add_header("Most Used")
@@ -325,7 +325,7 @@ func _add_grouped() -> void:
 			_add_template(keyword)
 
 	for category in _categories:
-		var keywords = _templates.keys().filter(func(keyword): return _templates[keyword].category == category)
+		var keywords := _templates.keys().filter(func(keyword): return _templates[keyword].category == category)
 		if keywords.is_empty():
 			continue
 		_add_header(category if not category.is_empty() else UNCATEGORIZED)
@@ -334,18 +334,18 @@ func _add_grouped() -> void:
 
 func _add_header(text: String) -> void:
 	_keys.append("")
-	var index = _list.add_item(text)
+	var index := _list.add_item(text)
 	_list.set_item_selectable(index, false)
 	_list.set_item_custom_fg_color(index, EditorInterface.get_editor_theme().get_color("accent_color", "Editor"))
 
 func _add_template(keyword: String) -> void:
-	var entry = _templates[keyword]
-	var params = Expander.format_params(entry.body)
-	var display = keyword + ("  " + params if not params.is_empty() else "")
+	var entry: Dictionary = _templates[keyword]
+	var params := Expander.format_params(entry.body)
+	var display := keyword + ("  " + params if not params.is_empty() else "")
 	_keys.append(keyword)
 	# indented under the category header
-	var index = _list.add_item(("   " if _is_grouped() else "") + display)
-	var tooltip = entry.description
+	var index := _list.add_item(("   " if _is_grouped() else "") + display)
+	var tooltip: String = entry.description
 	if not entry.category.is_empty():
 		tooltip += ("\n" if not tooltip.is_empty() else "") + "Category: " + entry.category
 	_list.set_item_tooltip(index, tooltip)
@@ -354,16 +354,16 @@ func _add_template(keyword: String) -> void:
 static func match_score(query: String, keyword: String, description: String) -> int:
 	if query.is_empty():
 		return 0
-	var q = query.to_lower()
-	var k = keyword.to_lower()
+	var q := query.to_lower()
+	var k := keyword.to_lower()
 	if k == q:
 		return 1000
 	if k.begins_with(q):
 		return 900 - k.length()
-	var index = k.find(q)
+	var index := k.find(q)
 	if index != -1:
 		return 700 - index
-	var gaps = _subsequence_gaps(q, k)
+	var gaps := _subsequence_gaps(q, k)
 	if gaps != -1:
 		return 500 - gaps
 	if description.to_lower().contains(q):
@@ -384,10 +384,10 @@ static func match_kind(score: int) -> int:
 
 # number of skipped characters when query chars appear in order, -1 otherwise
 static func _subsequence_gaps(query: String, text: String) -> int:
-	var pos = 0
-	var gaps = 0
+	var pos := 0
+	var gaps := 0
 	for c in query:
-		var found = text.find(c, pos)
+		var found := text.find(c, pos)
 		if found == -1:
 			return -1
 		gaps += found - pos
@@ -408,11 +408,11 @@ func _next_item(index: int, direction: int) -> int:
 	return -1
 
 func _move_selection(step: int) -> void:
-	var selected = _list.get_selected_items()
-	var from = selected[0] if selected.size() > 0 else -1
-	var target = clampi(from + step, 0, _keys.size() - 1)
-	var direction = 1 if step > 0 else -1
-	var index = _next_item(target, direction)
+	var selected := _list.get_selected_items()
+	var from := selected[0] if selected.size() > 0 else -1
+	var target := clampi(from + step, 0, _keys.size() - 1)
+	var direction := 1 if step > 0 else -1
+	var index := _next_item(target, direction)
 	if index == -1:
 		index = _next_item(target, -direction)
 	if index == -1:
@@ -421,14 +421,14 @@ func _move_selection(step: int) -> void:
 	_picked_keyword = _keys[index]
 
 func _show_preview(index: int) -> void:
-	var entry = _templates[_keys[index]]
+	var entry: Dictionary = _templates[_keys[index]]
 	var info: String = entry.description
-	var params = Expander.get_params(entry.body)
-	var defaults = Expander.get_defaults(entry.body)
-	var values = _params()
-	var lines = [] if info.is_empty() else [info]
+	var params := Expander.get_params(entry.body)
+	var defaults := Expander.get_defaults(entry.body)
+	var values := _params()
+	var lines := PackedStringArray() if info.is_empty() else PackedStringArray([info])
 	if not params.is_empty():
-		var described = []
+		var described := PackedStringArray()
 		for i in params.size():
 			if i < values.size():
 				described.append("%s = %s" % [params[i], values[i]])
@@ -444,13 +444,13 @@ func _show_preview(index: int) -> void:
 	_preview.text = Expander.get_preview(entry.body, values, _selection, _variables)
 
 func _choose(index: int) -> void:
-	var keyword = _keys[index]
-	var params = _params()
+	var keyword := _keys[index]
+	var params := _params()
 	close()
 	template_chosen.emit(keyword, params)
 
 func _choose_selected() -> void:
-	var selected = _list.get_selected_items()
+	var selected := _list.get_selected_items()
 	if selected.size() > 0:
 		_choose(selected[0])
 

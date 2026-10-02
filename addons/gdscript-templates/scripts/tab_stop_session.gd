@@ -20,12 +20,12 @@ func _init(p_text_edit: TextEdit, expanded: Dictionary, start_line: int, start_c
 	var text: String = expanded.text
 
 	for stop in expanded.stops:
-		var pos = _offset_to_position(text, stop.offset, start_line, start_column)
+		var pos := _offset_to_position(text, stop.offset, start_line, start_column)
 		if not _stops.any(func(s): return s.name == stop.name):
 			_primary.append(_stops.size())
 		_stops.append({"name": stop.name, "line": pos.x, "column": pos.y, "length": stop.length, "order": _stops.size()})
 
-	var cursor_pos = _offset_to_position(text, expanded.cursor, start_line, start_column)
+	var cursor_pos := _offset_to_position(text, expanded.cursor, start_line, start_column)
 	_cursor = {"name": "", "line": cursor_pos.x, "column": cursor_pos.y, "length": 0, "order": expanded.cursor_order}
 	_stops.append(_cursor)
 
@@ -88,8 +88,8 @@ func _on_caret_changed() -> void:
 	_stop()
 
 static func _offset_to_position(text: String, offset: int, start_line: int, start_column: int) -> Vector2i:
-	var before = text.substr(0, offset)
-	var newlines = before.count("\n")
+	var before := text.substr(0, offset)
+	var newlines := before.count("\n")
 	if newlines == 0:
 		return Vector2i(start_line, start_column + offset)
 	return Vector2i(start_line + newlines, offset - before.rfind("\n") - 1)
@@ -104,13 +104,13 @@ func _current_delta() -> int:
 func _is_caret_in_current() -> bool:
 	if not is_instance_valid(text_edit) or text_edit.get_line_count() != _line_count:
 		return false
-	var stop = _current_stop()
-	var end_column = stop.column + stop.length + _current_delta()
-	var caret_column = text_edit.get_caret_column()
+	var stop := _current_stop()
+	var end_column: int = stop.column + stop.length + _current_delta()
+	var caret_column := text_edit.get_caret_column()
 	return text_edit.get_caret_line() == stop.line and caret_column >= stop.column and caret_column <= end_column
 
 func _select_current() -> void:
-	var stop = _current_stop()
+	var stop := _current_stop()
 	if stop.length == 0:
 		# empty default value - nothing to select, just move the caret there
 		text_edit.deselect()
@@ -122,19 +122,19 @@ func _select_current() -> void:
 	_line_length = text_edit.get_line(stop.line).length()
 
 func _commit_current() -> void:
-	var stop = _current_stop()
-	var delta = _current_delta()
+	var stop := _current_stop()
+	var delta := _current_delta()
 	stop.length += delta
 	_shift_stops_after(stop, delta)
 
-	var value = text_edit.get_line(stop.line).substr(stop.column, stop.length)
+	var value := text_edit.get_line(stop.line).substr(stop.column, stop.length)
 	text_edit.begin_complex_operation()
 	for other in _stops:
 		if is_same(other, stop) or other.name != stop.name:
 			continue
 		if other.length == value.length() and text_edit.get_line(other.line).substr(other.column, other.length) == value:
 			continue
-		var old_length = other.length
+		var old_length: int = other.length
 		text_edit.remove_text(other.line, other.column, other.line, other.column + old_length)
 		if not value.is_empty():
 			text_edit.insert_text(value, other.line, other.column)

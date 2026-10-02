@@ -9,8 +9,8 @@ const TabStopSession = preload("res://addons/gdscript-templates/scripts/tab_stop
 # replaces the text from `from` to `to` (line, column) with the template body in one undo step,
 # returns the tab stops of the template, null when there is nothing to tab through
 static func insert(text_edit: TextEdit, body: String, from: Vector2i, to: Vector2i, params: Array = [], selection: String = "", variables: Dictionary = {}) -> TabStopSession:
-	var indent = Expander.leading_whitespace(text_edit.get_line(from.x))
-	var expanded = Expander.expand(body, params, indent, indent_unit(text_edit), selection, variables)
+	var indent := Expander.leading_whitespace(text_edit.get_line(from.x))
+	var expanded := Expander.expand(body, params, indent, indent_unit(text_edit), selection, variables)
 
 	text_edit.deselect()
 	text_edit.begin_complex_operation()
@@ -18,7 +18,7 @@ static func insert(text_edit: TextEdit, body: String, from: Vector2i, to: Vector
 	text_edit.insert_text(expanded.text, from.x, from.y)
 	text_edit.end_complex_operation()
 
-	var session = TabStopSession.new(text_edit, expanded, from.x, from.y)
+	var session := TabStopSession.new(text_edit, expanded, from.x, from.y)
 	session.start()
 	return session if session.active else null
 

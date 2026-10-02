@@ -84,7 +84,7 @@ func setup(defaults: Dictionary, user: Dictionary, project: Dictionary, use_defa
 
 # window = null opens the dialog in the main editor window
 func show_dialog(window: Window = null) -> void:
-	var dialog_size = Vector2i(Vector2(1000, 640) * EditorInterface.get_editor_scale())
+	var dialog_size := Vector2i(Vector2(1000, 640) * EditorInterface.get_editor_scale())
 	if window and window != EditorInterface.get_base_control().get_window():
 		window.add_child(self)
 		popup_centered(dialog_size)
@@ -93,7 +93,7 @@ func show_dialog(window: Window = null) -> void:
 
 # the dialog is already hidden, Keep Editing opens it again
 func _ask_to_save() -> void:
-	var ask = ConfirmationDialog.new()
+	var ask := ConfirmationDialog.new()
 	ask.title = "Unsaved Changes"
 	ask.dialog_text = "Save changes to the templates before closing?"
 	ask.ok_button_text = "Save"
@@ -117,15 +117,15 @@ func _ask_to_save() -> void:
 	ask.popup_centered()
 
 func _build() -> void:
-	var editor_theme = EditorInterface.get_editor_theme()
-	var scale = EditorInterface.get_editor_scale()
-	var code_font = editor_theme.get_font("source", "EditorFonts")
-	var code_font_size = editor_theme.get_font_size("source_size", "EditorFonts")
+	var editor_theme := EditorInterface.get_editor_theme()
+	var scale := EditorInterface.get_editor_scale()
+	var code_font := editor_theme.get_font("source", "EditorFonts")
+	var code_font_size := editor_theme.get_font_size("source_size", "EditorFonts")
 
-	var split = HSplitContainer.new()
+	var split := HSplitContainer.new()
 	add_child(split)
 
-	var left = VBoxContainer.new()
+	var left := VBoxContainer.new()
 	left.custom_minimum_size = Vector2(240, 0) * scale
 	split.add_child(left)
 
@@ -137,7 +137,7 @@ func _build() -> void:
 	left.add_child(_search)
 
 	if not _use_defaults:
-		var defaults_off = Label.new()
+		var defaults_off := Label.new()
 		defaults_off.text = "Default templates are disabled in Editor Settings."
 		defaults_off.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		defaults_off.modulate.a = 0.6
@@ -150,7 +150,7 @@ func _build() -> void:
 	_list.item_selected.connect(func(index): _load(_keys[index]))
 	left.add_child(_list)
 
-	var buttons = HBoxContainer.new()
+	var buttons := HBoxContainer.new()
 	left.add_child(buttons)
 	buttons.add_child(_create_button("Add", "Add", _on_add_pressed))
 	_duplicate_button = _create_button("Duplicate", "Duplicate", _on_duplicate_pressed)
@@ -158,12 +158,12 @@ func _build() -> void:
 	_remove_button = _create_button("Delete", "Remove", _on_remove_pressed)
 	buttons.add_child(_remove_button)
 
-	var right = VBoxContainer.new()
+	var right := VBoxContainer.new()
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	split.add_child(right)
 	_details = right
 
-	var grid = GridContainer.new()
+	var grid := GridContainer.new()
 	grid.columns = 2
 	right.add_child(grid)
 
@@ -186,7 +186,7 @@ func _build() -> void:
 	grid.add_child(_description)
 
 	grid.add_child(_create_label("Category"))
-	var category_row = HBoxContainer.new()
+	var category_row := HBoxContainer.new()
 	category_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_child(category_row)
 	_category = LineEdit.new()
@@ -219,7 +219,7 @@ func _build() -> void:
 	right.add_child(_status)
 
 	# the template and what it expands to, the divider is movable
-	var editors = VSplitContainer.new()
+	var editors := VSplitContainer.new()
 	editors.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right.add_child(editors)
 
@@ -234,10 +234,10 @@ func _build() -> void:
 	_body.text_changed.connect(_on_entry_changed)
 	editors.add_child(_body)
 
-	var preview_box = VBoxContainer.new()
+	var preview_box := VBoxContainer.new()
 	preview_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	editors.add_child(preview_box)
-	var preview_title = _create_label("Preview")
+	var preview_title := _create_label("Preview")
 	preview_title.modulate.a = 0.6
 	preview_box.add_child(preview_title)
 	_preview = CodeEdit.new()
@@ -255,7 +255,7 @@ func _build() -> void:
 	_params_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(_params_info)
 
-	var help = Label.new()
+	var help := Label.new()
 	help.text = "{name} - parameter, filled from words typed after the keyword or selected with Tab after expansion\n" \
 		+ "{name=value} - parameter with a default value\n" \
 		+ "{selection} - the selected code, when the template is inserted with a selection\n" \
@@ -267,14 +267,14 @@ func _build() -> void:
 	right.add_child(help)
 
 func _create_button(text: String, icon_name: String, callback: Callable) -> Button:
-	var button = Button.new()
+	var button := Button.new()
 	button.text = text
 	button.icon = EditorInterface.get_editor_theme().get_icon(icon_name, "EditorIcons")
 	button.pressed.connect(callback)
 	return button
 
 func _create_label(text: String) -> Label:
-	var label = Label.new()
+	var label := Label.new()
 	label.text = text
 	return label
 
@@ -290,7 +290,7 @@ func _exists(keyword: String) -> bool:
 	return _is_own(keyword) or (_use_defaults and _defaults.has(keyword))
 
 func _kind(keyword: String) -> String:
-	var is_default = _use_defaults and _defaults.has(keyword)
+	var is_default := _use_defaults and _defaults.has(keyword)
 	if not _is_own(keyword):
 		return KIND_DEFAULT
 	return KIND_MODIFIED if is_default else KIND_CUSTOM
@@ -299,7 +299,7 @@ func _get_entry(keyword: String) -> Dictionary:
 	return _own_templates(keyword)[keyword] if _is_own(keyword) else _defaults[keyword]
 
 func _item_text(keyword: String) -> String:
-	var tags = []
+	var tags := PackedStringArray()
 	match _kind(keyword):
 		KIND_MODIFIED:
 			tags.append("modified")
@@ -310,8 +310,8 @@ func _item_text(keyword: String) -> String:
 	return keyword + ("   (%s)" % ", ".join(tags) if not tags.is_empty() else "")
 
 func _refresh_list(select_keyword: String = _selected) -> void:
-	var query = _search.text.strip_edges().to_lower()
-	var all_keys = {}
+	var query := _search.text.strip_edges().to_lower()
+	var all_keys := {}
 	if _use_defaults:
 		all_keys.merge(_defaults)
 	all_keys.merge(_user)
@@ -319,7 +319,7 @@ func _refresh_list(select_keyword: String = _selected) -> void:
 
 	_keys.clear()
 	for keyword in all_keys:
-		var entry = _get_entry(keyword)
+		var entry := _get_entry(keyword)
 		if query.is_empty() or keyword.to_lower().contains(query) or entry.description.to_lower().contains(query) \
 				or entry.category.to_lower().contains(query):
 			_keys.append(keyword)
@@ -329,7 +329,7 @@ func _refresh_list(select_keyword: String = _selected) -> void:
 	for keyword in _keys:
 		_list.add_item(_item_text(keyword))
 
-	var index = _keys.find(select_keyword)
+	var index := _keys.find(select_keyword)
 	if index == -1 and not _keys.is_empty():
 		index = 0
 	if index == -1:
@@ -346,7 +346,7 @@ func _load(keyword: String) -> void:
 	_keyword_error.text = ""
 
 	if not keyword.is_empty():
-		var entry = _get_entry(keyword)
+		var entry := _get_entry(keyword)
 		_keyword.text = keyword
 		_description.text = entry.description
 		_category.text = entry.category
@@ -360,7 +360,7 @@ func _load(keyword: String) -> void:
 	_updating = false
 
 func _update_state() -> void:
-	var kind = _kind(_selected) if not _selected.is_empty() else ""
+	var kind := _kind(_selected) if not _selected.is_empty() else ""
 	_keyword.editable = kind == KIND_CUSTOM
 	match kind:
 		KIND_DEFAULT:
@@ -375,36 +375,36 @@ func _update_state() -> void:
 	_scope.select(SCOPE_PROJECT if _project.has(_selected) else SCOPE_ALL)
 	_update_params_info()
 
-	var is_modified = kind == KIND_MODIFIED
+	var is_modified := kind == KIND_MODIFIED
 	_remove_button.text = "Revert" if is_modified else "Delete"
 	_remove_button.icon = EditorInterface.get_editor_theme().get_icon("Reload" if is_modified else "Remove", "EditorIcons")
 	_remove_button.disabled = kind != KIND_MODIFIED and kind != KIND_CUSTOM
 	_duplicate_button.disabled = _selected.is_empty()
 
-	var index = _keys.find(_selected)
+	var index := _keys.find(_selected)
 	if index != -1:
 		_list.set_item_text(index, _item_text(_selected))
 
 func _fill_category_menu() -> void:
-	var categories = PackedStringArray()
+	var categories := PackedStringArray()
 	for templates in [_defaults, _user, _project]:
 		for keyword in templates:
-			var category = templates[keyword].category
+			var category: String = templates[keyword].category
 			if not category.is_empty() and not categories.has(category):
 				categories.append(category)
-	var menu = _category_menu.get_popup()
+	var menu := _category_menu.get_popup()
 	menu.clear()
 	for category in categories:
 		menu.add_item(category)
 
 func _update_params_info() -> void:
-	var body = _body.text
-	var params = Expander.get_params(body)
-	var defaults = Expander.get_defaults(body)
-	var described = []
+	var body := _body.text
+	var params := Expander.get_params(body)
+	var defaults := Expander.get_defaults(body)
+	var described := PackedStringArray()
 	for param in params:
 		described.append("%s = %s" % [param, defaults[param]] if defaults.has(param) else param)
-	var lines = ["Parameters: " + (", ".join(described) if not described.is_empty() else "none")]
+	var lines := PackedStringArray(["Parameters: " + (", ".join(described) if not described.is_empty() else "none")])
 	if Expander.uses_selection(body):
 		lines.append("Wraps the selected code.")
 	_params_info.text = "\n".join(lines)
@@ -413,8 +413,8 @@ func _update_params_info() -> void:
 func _on_entry_changed() -> void:
 	if _updating or _selected.is_empty():
 		return
-	var entry = {"body": _body.text, "description": _description.text.strip_edges(), "category": _category.text.strip_edges()}
-	var own = _own_templates(_selected)
+	var entry := {"body": _body.text, "description": _description.text.strip_edges(), "category": _category.text.strip_edges()}
+	var own := _own_templates(_selected)
 	if _use_defaults and _defaults.has(_selected) and _defaults[_selected] == entry:
 		own.erase(_selected)
 	else:
@@ -424,8 +424,8 @@ func _on_entry_changed() -> void:
 func _on_scope_selected(index: int) -> void:
 	if _updating or not _is_own(_selected):
 		return
-	var from = _own_templates(_selected)
-	var to = _project if _scope.get_item_id(index) == SCOPE_PROJECT else _user
+	var from := _own_templates(_selected)
+	var to := _project if _scope.get_item_id(index) == SCOPE_PROJECT else _user
 	if is_same(from, to):
 		return
 	# don't overwrite the template that is already there
@@ -441,14 +441,14 @@ func _on_scope_selected(index: int) -> void:
 func _on_keyword_changed(new_text: String) -> void:
 	if _updating or _selected.is_empty():
 		return
-	var keyword = new_text.strip_edges()
-	var error = _validate_keyword(keyword)
+	var keyword := new_text.strip_edges()
+	var error := _validate_keyword(keyword)
 	_keyword_error.text = error
 	if not error.is_empty() or keyword == _selected:
 		return
 
-	var own = _own_templates(_selected)
-	var entry = own[_selected]
+	var own := _own_templates(_selected)
+	var entry: Dictionary = own[_selected]
 	own.erase(_selected)
 	own[keyword] = entry
 	_keys[_keys.find(_selected)] = keyword
@@ -467,20 +467,20 @@ func _validate_keyword(keyword: String) -> String:
 func _unique_keyword(base: String) -> String:
 	if not _exists(base):
 		return base
-	var i = 2
+	var i := 2
 	while _exists("%s_%d" % [base, i]):
 		i += 1
 	return "%s_%d" % [base, i]
 
 func _on_add_pressed() -> void:
-	var keyword = _unique_keyword("new_template")
+	var keyword := _unique_keyword("new_template")
 	_user[keyword] = {"body": "|CURSOR|", "description": "", "category": ""}
 	_show_new_template(keyword)
 
 func _on_duplicate_pressed() -> void:
 	if _selected.is_empty():
 		return
-	var keyword = _unique_keyword(_selected + "_copy")
+	var keyword := _unique_keyword(_selected + "_copy")
 	# a copy of a project template stays in the project
 	_own_templates(_selected)[keyword] = _get_entry(_selected).duplicate()
 	_show_new_template(keyword)
@@ -495,7 +495,7 @@ func _show_new_template(keyword: String) -> void:
 func _on_remove_pressed() -> void:
 	if not _is_own(_selected):
 		return
-	var index = _keys.find(_selected)
+	var index := _keys.find(_selected)
 	_own_templates(_selected).erase(_selected)
 	# a reverted default, or a user template that was overridden by a project one
 	if _exists(_selected):
@@ -506,5 +506,5 @@ func _on_remove_pressed() -> void:
 
 func _on_custom_action(action: StringName) -> void:
 	if action == "show_file":
-		var path = TemplateStore.get_project_path() if _project.has(_selected) else TemplateStore.get_user_path()
+		var path := TemplateStore.get_project_path() if _project.has(_selected) else TemplateStore.get_user_path()
 		OS.shell_show_in_file_manager(path if FileAccess.file_exists(path) else path.get_base_dir())

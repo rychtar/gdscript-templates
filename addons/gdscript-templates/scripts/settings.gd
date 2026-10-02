@@ -10,7 +10,7 @@ const SHORTCUT_SHOW = PREFIX + "show_templates_shortcut"
 const SHORTCUT_EXPAND = PREFIX + "expand_template_shortcut"
 
 static func register() -> void:
-	var settings = EditorInterface.get_editor_settings()
+	var settings := EditorInterface.get_editor_settings()
 
 	_add_setting(settings, USE_DEFAULT_TEMPLATES, true, TYPE_BOOL)
 	_add_setting(settings, SHOW_IN_CODE_COMPLETION, true, TYPE_BOOL)
@@ -24,23 +24,23 @@ static func _add_shortcut_setting(settings: EditorSettings, name: String, keycod
 		settings.set_setting(name, _create_shortcut(keycode))
 	_add_setting(settings, name, _create_shortcut(keycode), TYPE_OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "Shortcut")
 
-static func _add_setting(settings: EditorSettings, name: String, default_value, type: int, hint: int = PROPERTY_HINT_NONE, hint_string: String = "") -> void:
+static func _add_setting(settings: EditorSettings, name: String, default_value: Variant, type: int, hint: int = PROPERTY_HINT_NONE, hint_string: String = "") -> void:
 	if not settings.has_setting(name):
 		settings.set_setting(name, default_value)
 	settings.set_initial_value(name, default_value, false)
 	settings.add_property_info({"name": name, "type": type, "hint": hint, "hint_string": hint_string})
 
 static func _create_shortcut(keycode: Key) -> Shortcut:
-	var event = InputEventKey.new()
+	var event := InputEventKey.new()
 	event.keycode = keycode
 	event.ctrl_pressed = true
 
-	var shortcut = Shortcut.new()
+	var shortcut := Shortcut.new()
 	shortcut.events = [event]
 	return shortcut
 
 static func matches_shortcut(path: String, event: InputEvent) -> bool:
-	var shortcut = EditorInterface.get_editor_settings().get_setting(path)
+	var shortcut: Variant = EditorInterface.get_editor_settings().get_setting(path)
 	return shortcut is Shortcut and shortcut.matches_event(event)
 
 static func create_gdscript_highlighter() -> SyntaxHighlighter:

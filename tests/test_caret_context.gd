@@ -14,7 +14,7 @@ func _find(text: String) -> Dictionary:
 	return CaretContext.find_keyword_before_caret(make_edit(text), _find_keyword)
 
 func test_find_keyword_with_params() -> void:
-	var found = _find("\tvec 1 \"a b\"")
+	var found := _find("\tvec 1 \"a b\"")
 	check("keyword", found.keyword, "vec")
 	check("start", found.start_column, 1)
 	check("params", found.params, ["1", "a b"])
@@ -22,7 +22,7 @@ func test_find_keyword_with_params() -> void:
 
 func test_find_keyword_exact_match_wins() -> void:
 	# "timer" is the keyword, the type "Timer" is its parameter
-	var found = _find("onready timer Timer")
+	var found := _find("onready timer Timer")
 	check("keyword", found.keyword, "timer")
 	check("params", found.params, ["Timer"])
 
@@ -54,32 +54,32 @@ func test_completion_word() -> void:
 	check("after $", CaretContext.completion_word(make_edit("$vec")), "")
 
 func test_popup_target_keyword() -> void:
-	var target = CaretContext.get_popup_target(make_edit("\tvec 1"), _find_keyword)
+	var target := CaretContext.get_popup_target(make_edit("\tvec 1"), _find_keyword)
 	check("replaces the keyword with params", [target.from, target.to], [Vector2i(0, 1), Vector2i(0, 6)])
 	check("params go into the filter", target.filter, "vec 1")
 	check("no selection", target.selection, "")
 
 func test_popup_target_word() -> void:
-	var target = CaretContext.get_popup_target(make_edit("x = fo"), _find_keyword)
+	var target := CaretContext.get_popup_target(make_edit("x = fo"), _find_keyword)
 	check("replaces the word", [target.from, target.to], [Vector2i(0, 4), Vector2i(0, 6)])
 	check("filter", target.filter, "fo")
 
 func test_popup_target_nothing_typed() -> void:
-	var target = CaretContext.get_popup_target(make_edit("x = "), _find_keyword)
+	var target := CaretContext.get_popup_target(make_edit("x = "), _find_keyword)
 	check("inserts at the caret", [target.from, target.to], [Vector2i(0, 4), Vector2i(0, 4)])
 	check("filter", target.filter, "")
 
 func test_popup_target_selection() -> void:
-	var edit = make_edit("\ta = 1\n\t\tb = 2\n\tc = 3")
+	var edit := make_edit("\ta = 1\n\t\tb = 2\n\tc = 3")
 	edit.select(0, 1, 2, 6)
-	var target = CaretContext.get_popup_target(edit, _find_keyword)
+	var target := CaretContext.get_popup_target(edit, _find_keyword)
 	check("range", [target.from, target.to], [Vector2i(0, 1), Vector2i(2, 6)])
 	check("selection is dedented", target.selection, "a = 1\n\tb = 2\nc = 3")
 
 func test_popup_target_whole_line_selection() -> void:
 	# a selection ending at the start of the next line is the line before it
-	var edit = make_edit("\ta = 1\n\tb = 2")
+	var edit := make_edit("\ta = 1\n\tb = 2")
 	edit.select(0, 0, 1, 0)
-	var target = CaretContext.get_popup_target(edit, _find_keyword)
+	var target := CaretContext.get_popup_target(edit, _find_keyword)
 	check("range", [target.from, target.to], [Vector2i(0, 1), Vector2i(0, 6)])
 	check("selection", target.selection, "a = 1")

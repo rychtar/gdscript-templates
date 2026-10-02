@@ -57,7 +57,7 @@ static func _modified_time(path: String) -> int:
 
 # picks up changes made to the files outside the plugin, returns true when something was reloaded
 func reload_if_changed() -> bool:
-	var changed = false
+	var changed := false
 	for path in [get_user_path(), get_project_path()]:
 		if _modified_time(path) != _loaded_times.get(path, 0):
 			changed = true
@@ -76,23 +76,23 @@ func rebuild() -> void:
 	if not use_defaults:
 		return
 	for keyword in templates:
-		var entry = templates[keyword]
+		var entry: Dictionary = templates[keyword]
 		if entry.category.is_empty() and defaults.has(keyword):
-			var with_category = entry.duplicate()
+			var with_category: Dictionary = entry.duplicate()
 			with_category.category = defaults[keyword].category
 			templates[keyword] = with_category
 
 # categories in the order of the default templates, then the others alphabetically,
 # "" (templates without a category) last
 func get_categories() -> PackedStringArray:
-	var categories = PackedStringArray()
+	var categories := PackedStringArray()
 	for keyword in defaults:
 		if not categories.has(defaults[keyword].category):
 			categories.append(defaults[keyword].category)
-	var others = PackedStringArray()
-	var uncategorized = false
+	var others := PackedStringArray()
+	var uncategorized := false
 	for keyword in templates:
-		var category = templates[keyword].category
+		var category: String = templates[keyword].category
 		if category.is_empty():
 			uncategorized = true
 		elif not categories.has(category) and not others.has(category):
@@ -108,14 +108,14 @@ func save_templates(new_user: Dictionary, new_project: Dictionary) -> bool:
 	project = new_project.duplicate(true)
 	rebuild()
 
-	var ok = _save(user, get_user_path())
+	var ok := _save(user, get_user_path())
 	# no empty project file in projects without project templates
 	if not project.is_empty() or FileAccess.file_exists(get_project_path()):
 		ok = _save(project, get_project_path()) and ok
 	return ok
 
 func _save(entries: Dictionary, path: String) -> bool:
-	var ok = FileUtils.save_json_file(serialize(entries), path)
+	var ok := FileUtils.save_json_file(serialize(entries), path)
 	_loaded_times[path] = _modified_time(path)
 	return ok
 
@@ -129,16 +129,16 @@ func find_keyword(word: String, case_sensitive: bool = false) -> String:
 		return word
 	if case_sensitive:
 		return ""
-	var word_lower = word.to_lower()
+	var word_lower := word.to_lower()
 	for keyword in templates:
 		if keyword.to_lower() == word_lower:
 			return keyword
 	return ""
 
 static func normalize(raw: Dictionary) -> Dictionary:
-	var result = {}
+	var result := {}
 	for keyword in raw:
-		var value = raw[keyword]
+		var value: Variant = raw[keyword]
 		if value is String:
 			result[keyword] = {"body": value, "description": "", "category": ""}
 		elif value is Dictionary and value.has("body"):
@@ -152,13 +152,13 @@ static func normalize(raw: Dictionary) -> Dictionary:
 	return result
 
 static func serialize(entries: Dictionary) -> Dictionary:
-	var result = {}
+	var result := {}
 	for keyword in entries:
-		var entry = entries[keyword]
+		var entry: Dictionary = entries[keyword]
 		if entry.description.is_empty() and entry.category.is_empty():
 			result[keyword] = entry.body
 		else:
-			var value = {"body": entry.body}
+			var value := {"body": entry.body}
 			if not entry.description.is_empty():
 				value.description = entry.description
 			if not entry.category.is_empty():
