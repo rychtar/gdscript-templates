@@ -63,3 +63,15 @@ func test_expand_selection() -> void:
 func test_dedent() -> void:
 	check("shared indentation", Expander.dedent("\t\ta\n\t\t\tb\n\n\t\tc"), "a\n\tb\n\nc")
 	check("partly shared", Expander.dedent("  a\n b"), " a\nb")
+
+func test_expand_variables() -> void:
+	var variables = {"filename": "player", "class": "Player"}
+	check("replaced", Expander.expand("class_name {@class} # {@filename}.gd", [], "", "\t", "", variables).text,
+		"class_name Player # player.gd")
+	check("unknown stays as it is", Expander.expand("{@nope}", [], "", "\t", "", variables).text, "{@nope}")
+	check("without variables", Expander.expand("{@class}").text, "{@class}")
+	check("a variable is not a parameter or a stop", Expander.get_params("{@class} {a}"), PackedStringArray(["a"]))
+	check("no stops", Expander.expand("{@class}", [], "", "\t", "", variables).stops.size(), 0)
+	check("preview", Expander.get_preview("{@class}", [], "", variables), "Player")
+	check("cursor after a variable", Expander.expand("{@class}|CURSOR|x", [], "", "\t", "", variables).cursor, 6)
+	check("a parameter with the same name is independent", Expander.expand("{class} {@class}", ["A"], "", "\t", "", variables).text, "A Player")

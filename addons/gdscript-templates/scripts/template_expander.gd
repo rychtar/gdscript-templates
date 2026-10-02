@@ -5,13 +5,15 @@ extends RefCounted
 #   {name}          parameter
 #   {name=default}  parameter with a default value
 #   {selection}     code selected when the template was inserted
+#   {@name}         variable filled in on insertion: {@filename}, {@class}, {@date} (see template_variables.gd)
 #   |CURSOR|        caret position after expansion
 #   \t              one indent level (converted to spaces if needed)
 
 const CURSOR = "CURSOR"
 const CURSOR_MARKER = "|CURSOR|"
 const SELECTION = "selection"
-const PLACEHOLDER_PATTERN = "\\|CURSOR\\||\\{([A-Za-z_][A-Za-z0-9_]*)(?:=([^{}\\n]*))?\\}"
+# groups: 1 parameter name, 2 its default, 3 variable name
+const PLACEHOLDER_PATTERN = "\\|CURSOR\\||\\{([A-Za-z_][A-Za-z0-9_]*)(?:=([^{}\\n]*))?\\}|\\{@([A-Za-z_][A-Za-z0-9_]*)\\}"
 
 # words separated by spaces, "quoted text" is one word
 const ARGS_PATTERN = "\"([^\"]*)\"?|\\S+"
@@ -75,13 +77,14 @@ static func uses_selection(body: String) -> bool:
 static func _is_param(param_name: String) -> bool:
 	return not param_name.is_empty() and param_name != CURSOR and param_name != SELECTION
 
-static func get_preview(body: String, values: Array = [], selection: String = "") -> String:
-	return expand(body, values, "", "\t", selection).text
+static func get_preview(body: String, values: Array = [], selection: String = "", variables: Dictionary = {}) -> String:
+	return expand(body, values, "", "\t", selection, variables).text
 
 # returns {text, cursor, cursor_order, stops} - stops are params without a value: [{name, offset, length}]
 # cursor_order is the position of |CURSOR| among the stops (-0.5 before the first one, 0.5 between the first and the second, ...)
 # a param without a value is filled with its default (or its name) and becomes a tab stop
-static func expand(body: String, values: Array = [], indent: String = "", indent_unit: String = "\t", selection: String = "") -> Dictionary:
+# {@name} is replaced with variables[name], an unknown variable stays as it is
+static func expand(body: String, values: Array = [], indent: String = "", indent_unit: String = "\t", selection: String = "", variables: Dictionary = {}) -> Dictionary:
 	var params = get_params(body)
 	var defaults = get_defaults(body)
 	var source = _apply_indentation(body, indent, indent_unit)
@@ -98,6 +101,10 @@ static func expand(body: String, values: Array = [], indent: String = "", indent
 	for result in _get_regex().search_all(source):
 		text += source.substr(last_end, result.get_start() - last_end)
 		last_end = result.get_end()
+
+		if result.get_start(3) != -1:
+			text += str(variables.get(result.get_string(3), result.get_string()))
+			continue
 
 		var param_name = result.get_string(1)
 		if param_name.is_empty() or param_name == CURSOR:

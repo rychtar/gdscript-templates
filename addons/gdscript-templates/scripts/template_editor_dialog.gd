@@ -18,6 +18,9 @@ const KIND_CUSTOM = "custom"
 const SCOPE_ALL = 0
 const SCOPE_PROJECT = 1
 
+# shown in the preview of templates with {selection}
+const SAMPLE_SELECTION = "# selected code"
+
 var _defaults: Dictionary = {}
 var _user: Dictionary = {}
 var _project: Dictionary = {}
@@ -26,6 +29,8 @@ var _saved_user: Dictionary = {}
 var _saved_project: Dictionary = {}
 var _confirm_discard: bool = false
 var _use_defaults: bool = true
+# values of {@name} in the preview
+var _variables: Dictionary = {}
 var _keys: Array[String] = []
 var _selected: String = ""
 var _updating: bool = false
@@ -43,15 +48,17 @@ var _category_menu: MenuButton
 var _scope: OptionButton
 var _status: Label
 var _body: CodeEdit
+var _preview: CodeEdit
 var _params_info: Label
 
-func setup(defaults: Dictionary, user: Dictionary, project: Dictionary, use_defaults: bool) -> void:
+func setup(defaults: Dictionary, user: Dictionary, project: Dictionary, use_defaults: bool, variables: Dictionary = {}) -> void:
 	_defaults = defaults
 	_user = user.duplicate(true)
 	_project = project.duplicate(true)
 	_saved_user = user.duplicate(true)
 	_saved_project = project.duplicate(true)
 	_use_defaults = use_defaults
+	_variables = variables
 
 	title = "GDScript Templates"
 	ok_button_text = "Save"
@@ -211,15 +218,38 @@ func _build() -> void:
 	_status.modulate.a = 0.6
 	right.add_child(_status)
 
+	# the template and what it expands to, the divider is movable
+	var editors = VSplitContainer.new()
+	editors.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right.add_child(editors)
+
 	_body = CodeEdit.new()
 	_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_body.custom_minimum_size = Vector2(0, 120) * scale
 	_body.gutters_draw_line_numbers = true
 	_body.indent_use_spaces = false
 	_body.syntax_highlighter = Settings.create_gdscript_highlighter()
 	_body.add_theme_font_override("font", code_font)
 	_body.add_theme_font_size_override("font_size", code_font_size)
 	_body.text_changed.connect(_on_entry_changed)
-	right.add_child(_body)
+	editors.add_child(_body)
+
+	var preview_box = VBoxContainer.new()
+	preview_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	editors.add_child(preview_box)
+	var preview_title = _create_label("Preview")
+	preview_title.modulate.a = 0.6
+	preview_box.add_child(preview_title)
+	_preview = CodeEdit.new()
+	_preview.editable = false
+	_preview.focus_mode = Control.FOCUS_NONE
+	_preview.context_menu_enabled = false
+	_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_preview.custom_minimum_size = Vector2(0, 80) * scale
+	_preview.syntax_highlighter = Settings.create_gdscript_highlighter()
+	_preview.add_theme_font_override("font", code_font)
+	_preview.add_theme_font_size_override("font_size", code_font_size)
+	preview_box.add_child(_preview)
 
 	_params_info = Label.new()
 	_params_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -229,6 +259,7 @@ func _build() -> void:
 	help.text = "{name} - parameter, filled from words typed after the keyword or selected with Tab after expansion\n" \
 		+ "{name=value} - parameter with a default value\n" \
 		+ "{selection} - the selected code, when the template is inserted with a selection\n" \
+		+ "{@filename} {@class} {@date} - the script's file name, its class name and today's date\n" \
 		+ "|CURSOR| - caret position after expansion\n" \
 		+ "Options and shortcuts: Editor Settings > Plugins > GDScript Templates (enable Advanced Settings)"
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -377,6 +408,7 @@ func _update_params_info() -> void:
 	if Expander.uses_selection(body):
 		lines.append("Wraps the selected code.")
 	_params_info.text = "\n".join(lines)
+	_preview.text = Expander.get_preview(body, [], SAMPLE_SELECTION, _variables)
 
 func _on_entry_changed() -> void:
 	if _updating or _selected.is_empty():

@@ -6,6 +6,8 @@ const Settings = preload("res://addons/gdscript-templates/scripts/settings.gd")
 const TemplateStore = preload("res://addons/gdscript-templates/scripts/template_store.gd")
 const TemplateExpander = preload("res://addons/gdscript-templates/scripts/template_expander.gd")
 const TabStopSession = preload("res://addons/gdscript-templates/scripts/tab_stop_session.gd")
+const TemplateInserter = preload("res://addons/gdscript-templates/scripts/template_inserter.gd")
+const TemplateVariables = preload("res://addons/gdscript-templates/scripts/template_variables.gd")
 const CaretContext = preload("res://addons/gdscript-templates/scripts/caret_context.gd")
 const CompletionPopup = preload("res://addons/gdscript-templates/scripts/completion_popup.gd")
 const TemplateEditorDialog = preload("res://addons/gdscript-templates/scripts/template_editor_dialog.gd")
@@ -195,7 +197,7 @@ func show_templates_popup(text_edit: TextEdit):
 	var target = CaretContext.get_popup_target(text_edit, store.find_keyword)
 	_close_templates_popup()
 	popup = CompletionPopup.new()
-	popup.setup(store.templates, target.filter, target.selection, store.usage, store.get_categories())
+	popup.setup(store.templates, target.filter, target.selection, store.usage, store.get_categories(), _get_variables())
 	popup.template_chosen.connect(func(keyword, params):
 		if is_instance_valid(text_edit):
 			insert_template(text_edit, keyword, target.from, target.to, params, target.selection)
@@ -215,34 +217,22 @@ func insert_template(text_edit: TextEdit, keyword: String, from: Vector2i, to: V
 		session.finish()
 		session = null
 
-	var indent = TemplateExpander.leading_whitespace(text_edit.get_line(from.x))
-	var expanded = TemplateExpander.expand(store.templates[keyword].body, params, indent, _get_indent_unit(text_edit), selection)
-
-	text_edit.deselect()
-	text_edit.begin_complex_operation()
-	text_edit.remove_text(from.x, from.y, to.x, to.y)
-	text_edit.insert_text(expanded.text, from.x, from.y)
-	text_edit.end_complex_operation()
+	session = TemplateInserter.insert(text_edit, store.templates[keyword].body, from, to, params, selection, _get_variables())
 	store.record_use(keyword)
-
-	session = TabStopSession.new(text_edit, expanded, from.x, from.y)
-	session.start()
-	if not session.active:
-		session = null
 
 	text_edit.grab_focus()
 	_cancel_code_completion_later(text_edit)
 	Debug.info("✓ Template Completed!")
 
-func _get_indent_unit(text_edit: TextEdit) -> String:
-	if text_edit is CodeEdit and text_edit.indent_use_spaces:
-		return " ".repeat(text_edit.indent_size)
-	return "\t"
+# values of {@filename}, {@class} and {@date} for the script being edited
+func _get_variables() -> Dictionary:
+	var script = EditorInterface.get_script_editor().get_current_script()
+	return TemplateVariables.build(script.resource_path if script else "")
 
 func _open_template_editor(window: Window = null):
 	store.reload_if_changed()
 	var dialog = TemplateEditorDialog.new()
-	dialog.setup(store.defaults, store.user, store.project, store.use_defaults)
+	dialog.setup(store.defaults, store.user, store.project, store.use_defaults, _get_variables())
 	dialog.templates_saved.connect(store.save_templates)
 	dialog.show_dialog(window)
 

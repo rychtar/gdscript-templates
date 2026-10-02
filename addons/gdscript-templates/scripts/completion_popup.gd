@@ -31,6 +31,8 @@ var _picked_keyword := ""
 var _selection := ""
 # keyword -> how many times it was inserted
 var _usage: Dictionary = {}
+# values of {@name} in the templates
+var _variables: Dictionary = {}
 
 var _text_edit: TextEdit
 # caret line when opened, the panel sits right under it
@@ -41,11 +43,12 @@ var _list: ItemList
 var _info: Label
 var _preview: CodeEdit
 
-func setup(templates: Dictionary, filter: String, selection: String = "", usage: Dictionary = {}, categories: PackedStringArray = []) -> void:
+func setup(templates: Dictionary, filter: String, selection: String = "", usage: Dictionary = {}, categories: PackedStringArray = [], variables: Dictionary = {}) -> void:
 	_templates = templates
 	_selection = selection
 	_usage = usage
 	_categories = categories
+	_variables = variables
 	_build()
 	_search.text = filter
 
@@ -438,7 +441,7 @@ func _show_preview(index: int) -> void:
 		lines.append("Wraps the selected code." if Expander.uses_selection(entry.body) else "Replaces the selected code.")
 	_info.text = "\n".join(lines)
 	_info.visible = not lines.is_empty()
-	_preview.text = Expander.get_preview(entry.body, values, _selection)
+	_preview.text = Expander.get_preview(entry.body, values, _selection, _variables)
 
 func _choose(index: int) -> void:
 	var keyword = _keys[index]

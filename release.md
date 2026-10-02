@@ -1,5 +1,12 @@
 # Unreleased
 
+## Added
+- Variables in templates: `{@filename}` (the script's file name), `{@class}` (the same in PascalCase)
+  and `{@date}` (today, `YYYY-MM-DD`). They are filled in when the template is inserted and shown
+  in the preview. The `@` keeps them apart from parameters, so existing templates are not affected.
+- New templates `classf` (`class_name` from the file name and `extends`) and `todod` (TODO with the date).
+- The template editor shows a live preview of the expanded template under the code.
+
 ## Changed
 - Requires Godot 4.5 or newer (was 4.2).
 - Removed the migration of settings and templates from versions 1.0 and 1.1 (old `user://code_templates*.json`

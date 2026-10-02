@@ -1,6 +1,8 @@
 {
 	"tool": {"body": "@tool\n|CURSOR|", "description": "Run the script in the editor (@tool)", "category": "Script"},
 	"class": {"body": "class_name {name}\nextends {parent=Node}\n\n|CURSOR|", "description": "class_name and extends header", "category": "Script"},
+	"classf": {"body": "class_name {@class}\nextends {parent=Node}\n\n|CURSOR|", "description": "class_name from the file name and extends header", "category": "Script"},
+	"todod": {"body": "# TODO ({@date}): |CURSOR|", "description": "TODO comment with today's date", "category": "Script"},
 	"region": {"body": "#region {name}\n{selection}|CURSOR|\n#endregion", "description": "Foldable region, wraps the selected code", "category": "Script"},
 	"todo": {"body": "# TODO: |CURSOR|", "description": "TODO comment", "category": "Script"},
 	"fixme": {"body": "# FIXME: |CURSOR|", "description": "FIXME comment", "category": "Script"},

@@ -58,7 +58,8 @@ movement (`move2d`), a state machine (`statem`), files (`fread`, `fwrite`), math
 
 Open **Project → Tools → GDScript Templates...** (or **Edit Templates...** in the
 browser). You can add your own templates or change the built-in ones. A changed
-built-in template can be reverted to the original.
+built-in template can be reverted to the original. The editor shows a live preview
+of what the template expands to.
 
 Your templates are saved to `gdscript_templates.json` in the Godot editor config
 folder, so all your projects use the same file. A template can also be available
@@ -82,6 +83,9 @@ Godot are picked up automatically. Template syntax:
 - `{name}` is a parameter
 - `{name=value}` is a parameter with a default value (`{name=}` for an empty one)
 - `{selection}` is the code that was selected when the template was inserted
+- `{@filename}`, `{@class}` and `{@date}` are variables filled in when the template is inserted:
+  the file name of the script (`player_controller`), the same as a class name (`PlayerController`)
+  and today's date (`2026-10-02`)
 - `|CURSOR|` is where the cursor ends up after expanding
 - `\t` is one indent level (converted to spaces if your editor uses spaces)
 - `description` and `category` are optional, they are shown in the template browser
