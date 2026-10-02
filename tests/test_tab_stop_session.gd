@@ -69,3 +69,64 @@ func test_moving_the_caret_away_ends_the_session() -> void:
 	await tree.process_frame
 	check("session ended", session.active, false)
 	check("value still copied", edit.get_line(0), "x x")
+
+func test_choices_of_the_selected_parameter() -> void:
+	var started := _start("{t|int,float} {u}")
+	var session: TabStopSession = started[1]
+	check("choices", session.current_choices(), PackedStringArray(["int", "float"]))
+	check("position", session.current_position(), Vector2i(0, 0))
+	check("index", session.current_choice_index(), 0)
+	session.next()
+	check("no choices on the next one", session.current_choices(), PackedStringArray())
+
+func test_cycle_choice() -> void:
+	var started := _start("{t|int,float,String}")
+	var edit: CodeEdit = started[0]
+	var session: TabStopSession = started[1]
+	check("next", [session.cycle_choice(1), edit.text, edit.get_selected_text()], [true, "float", "float"])
+	session.cycle_choice(1)
+	check("last", edit.text, "String")
+	session.cycle_choice(1)
+	check("wraps around", edit.text, "int")
+	session.cycle_choice(-1)
+	check("previous wraps around", edit.text, "String")
+	check("index", session.current_choice_index(), 2)
+
+func test_cycle_from_a_typed_value() -> void:
+	var started := _start("{t|int,float,String}")
+	var edit: CodeEdit = started[0]
+	var session: TabStopSession = started[1]
+	edit.insert_text_at_caret("bool")
+	check("not a choice", session.current_choice_index(), -1)
+	session.cycle_choice(1)
+	check("forward starts at the first", edit.text, "int")
+	edit.insert_text_at_caret("bool")
+	session.cycle_choice(-1)
+	check("backward starts at the last", edit.text, "String")
+
+func test_cycle_choice_without_choices() -> void:
+	var started := _start("{a} {b|x,y}")
+	var edit: CodeEdit = started[0]
+	check("nothing to cycle", started[1].cycle_choice(1), false)
+	check("text is the same", edit.text, "a x")
+
+func test_choice_is_copied_and_the_next_stop_follows() -> void:
+	var started := _start("{t|int,float,String} {u} {t}")
+	var edit: CodeEdit = started[0]
+	var session: TabStopSession = started[1]
+	session.cycle_choice(1)
+	session.cycle_choice(1)
+	session.next()
+	check("copied to the other place", edit.text, "String u String")
+	check("the next parameter is in the right place", edit.get_selected_text(), "u")
+
+func test_finished_is_emitted_once() -> void:
+	var started := _start("{a} {b}")
+	var session: TabStopSession = started[1]
+	var count := [0]
+	session.finished.connect(func(): count[0] += 1)
+	session.next()
+	check("not yet", count[0], 0)
+	session.next()
+	session.finish()
+	check("once", count[0], 1)

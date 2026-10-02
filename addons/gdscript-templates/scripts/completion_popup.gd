@@ -11,6 +11,7 @@ signal closed
 
 const Settings = preload("res://addons/gdscript-templates/scripts/settings.gd")
 const Expander = preload("res://addons/gdscript-templates/scripts/template_expander.gd")
+const PanelStyle = preload("res://addons/gdscript-templates/scripts/panel_style.gd")
 
 # panel height in script lines, shrinks when the script editor is smaller
 const HEIGHT_LINES = 22
@@ -133,33 +134,10 @@ func _add_button(parent: Control, text: String, icon_name: String, tooltip: Stri
 	return button
 
 func _apply_style(text_edit: TextEdit) -> void:
-	var scale := EditorInterface.get_editor_scale()
-	var editor_theme := EditorInterface.get_editor_theme()
-	var style := StyleBoxFlat.new()
-	style.bg_color = _opaque_background(text_edit)
-	style.shadow_color = Color(0, 0, 0, 0.45)
-	style.shadow_size = int(10 * scale)
-	style.border_color = editor_theme.get_color("accent_color", "Editor")
-	style.border_width_left = int(3 * scale)
-	style.set_border_width(SIDE_TOP, 1)
-	style.set_border_width(SIDE_BOTTOM, 1)
-	style.set_content_margin_all(6 * scale)
-	style.set_corner_radius_all(int(3 * scale))
+	var style := PanelStyle.create(text_edit)
 	add_theme_stylebox_override("panel", style)
-
-	# same font and zoom as the script
-	for control in [_list, _preview]:
-		control.add_theme_font_override("font", text_edit.get_theme_font("font"))
-		control.add_theme_font_size_override("font_size", text_edit.get_theme_font_size("font_size"))
+	PanelStyle.use_font_of(text_edit, [_list, _preview])
 	_preview.add_theme_color_override("background_color", text_edit.get_theme_color("background_color").lerp(style.bg_color, 0.5))
-
-# solid, like a tooltip: the script editor's background_color is often transparent
-static func _opaque_background(text_edit: TextEdit) -> Color:
-	var bg := text_edit.get_theme_color("background_color")
-	if bg.a < 0.9:
-		bg = EditorInterface.get_editor_theme().get_color("base_color", "Editor")
-	bg.a = 1.0
-	return bg.lightened(0.05)
 
 # opens under the caret line, as a child of the text edit
 func open(text_edit: TextEdit) -> void:
@@ -440,19 +418,10 @@ func _move_selection(step: int) -> void:
 func _show_preview(index: int) -> void:
 	var entry: Dictionary = _templates[_keys[index]]
 	var info: String = entry.description
-	var params := Expander.get_params(entry.body)
-	var defaults := Expander.get_defaults(entry.body)
 	var values := _params()
 	var lines := PackedStringArray() if info.is_empty() else PackedStringArray([info])
-	if not params.is_empty():
-		var described := PackedStringArray()
-		for i in params.size():
-			if i < values.size():
-				described.append("%s = %s" % [params[i], values[i]])
-			elif defaults.has(params[i]):
-				described.append("%s (default: %s)" % [params[i], defaults[params[i]]])
-			else:
-				described.append(params[i])
+	var described := Expander.describe_params(entry.body, values)
+	if not described.is_empty():
 		lines.append("Parameters: " + ", ".join(described))
 	if not _selection.is_empty():
 		lines.append("Wraps the selected code." if Expander.uses_selection(entry.body) else "Replaces the selected code.")

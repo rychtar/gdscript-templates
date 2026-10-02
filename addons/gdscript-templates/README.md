@@ -37,6 +37,10 @@ in `prop`) only needs to be typed once. Put a value with spaces in quotes:
 `func move "delta: float"`. Quotes also keep a value that is itself a keyword from being
 taken for the template: `if "input"`.
 
+Some parameters have choices: in `export` the type is `float`, `int`, `bool`, `String`, ...
+When such a parameter is selected, the choices are listed under it. `Up` and `Down` change the
+value, `Tab` or `Enter` confirm it and go to the next parameter. You can also type your own value.
+
 Select some code and press `Ctrl+E` (or `Ctrl+Space`) to wrap it in a template:
 `if`, `ife`, `for`, `fori`, `while`, `region`, `isval`, `isnull`, `dicthas` and
 `evact` put the selected code inside the new block.
@@ -82,6 +86,7 @@ Godot are picked up automatically. Template syntax:
 
 - `{name}` is a parameter
 - `{name=value}` is a parameter with a default value (`{name=}` for an empty one)
+- `{name|a,b,c}` is a parameter with choices, the first one is the default
 - `{selection}` is the code that was selected when the template was inserted
 - `{@filename}`, `{@class}` and `{@date}` are variables filled in when the template is inserted:
   the file name of the script (`player_controller`), the same as a class name (`PlayerController`)

@@ -4,6 +4,7 @@ extends RefCounted
 # Template syntax:
 #   {name}          parameter
 #   {name=default}  parameter with a default value
+#   {name|a,b,c}    parameter with choices, the first one is the default (↑ ↓ change it on the tab stop)
 #   {selection}     code selected when the template was inserted
 #   {@name}         variable filled in on insertion: {@filename}, {@class}, {@date} (see template_variables.gd)
 #   |CURSOR|        caret position after expansion
@@ -12,8 +13,8 @@ extends RefCounted
 const CURSOR = "CURSOR"
 const CURSOR_MARKER = "|CURSOR|"
 const SELECTION = "selection"
-# groups: 1 parameter name, 2 its default, 3 variable name
-const PLACEHOLDER_PATTERN = "\\|CURSOR\\||\\{([A-Za-z_][A-Za-z0-9_]*)(?:=([^{}\\n]*))?\\}|\\{@([A-Za-z_][A-Za-z0-9_]*)\\}"
+# groups: 1 parameter name, 2 its default, 3 its choices, 4 variable name
+const PLACEHOLDER_PATTERN = "\\|CURSOR\\||\\{([A-Za-z_][A-Za-z0-9_]*)(?:=([^{}\\n]*)|\\|([^{}\\n]*))?\\}|\\{@([A-Za-z_][A-Za-z0-9_]*)\\}"
 
 # words separated by spaces, "quoted text" is one word
 const ARGS_PATTERN = "\"([^\"]*)\"?|\\S+"
@@ -51,14 +52,59 @@ static func get_params(body: String) -> PackedStringArray:
 			params.append(param_name)
 	return params
 
-# parameter name -> default value, the first default of a parameter wins
+# parameter name -> default value, the first default of a parameter wins,
+# the default of a parameter with choices is the first choice
 static func get_defaults(body: String) -> Dictionary:
 	var defaults := {}
 	for result in _get_regex().search_all(body):
 		var param_name: String = result.get_string(1)
-		if _is_param(param_name) and result.get_start(2) != -1 and not defaults.has(param_name):
+		if not _is_param(param_name) or defaults.has(param_name):
+			continue
+		if result.get_start(2) != -1:
 			defaults[param_name] = result.get_string(2)
+		elif result.get_start(3) != -1:
+			var choices := _parse_choices(result.get_string(3))
+			if not choices.is_empty():
+				defaults[param_name] = choices[0]
 	return defaults
+
+# parameter name -> its choices, only for parameters with {name|a,b}, the first one of a parameter wins
+static func get_choices(body: String) -> Dictionary:
+	var all_choices := {}
+	for result in _get_regex().search_all(body):
+		var param_name: String = result.get_string(1)
+		if _is_param(param_name) and result.get_start(3) != -1 and not all_choices.has(param_name):
+			var choices := _parse_choices(result.get_string(3))
+			if not choices.is_empty():
+				all_choices[param_name] = choices
+	return all_choices
+
+# "a, b,,c" -> a, b, c
+static func _parse_choices(text: String) -> PackedStringArray:
+	var choices := PackedStringArray()
+	for choice in text.split(","):
+		if not choice.strip_edges().is_empty():
+			choices.append(choice.strip_edges())
+	return choices
+
+# each parameter as shown in the template browser and the editor: "x = 5" for a given value,
+# "x (a | b)" with choices, "x (default: 1)" with a default, "x" otherwise
+static func describe_params(body: String, values: Array = []) -> PackedStringArray:
+	var params := get_params(body)
+	var defaults := get_defaults(body)
+	var all_choices := get_choices(body)
+	var described := PackedStringArray()
+	for i in params.size():
+		var param_name := params[i]
+		if i < values.size():
+			described.append("%s = %s" % [param_name, values[i]])
+		elif all_choices.has(param_name):
+			described.append("%s (%s)" % [param_name, " | ".join(all_choices[param_name])])
+		elif defaults.has(param_name):
+			described.append("%s (default: %s)" % [param_name, defaults[param_name]])
+		else:
+			described.append(param_name)
+	return described
 
 # "{x} {y}" - the parameters of the template as shown in lists
 static func format_params(body: String, separator: String = " ") -> String:
@@ -80,13 +126,14 @@ static func _is_param(param_name: String) -> bool:
 static func get_preview(body: String, values: Array = [], selection: String = "", variables: Dictionary = {}) -> String:
 	return expand(body, values, "", "\t", selection, variables).text
 
-# returns {text, cursor, cursor_order, stops} - stops are params without a value: [{name, offset, length}]
+# returns {text, cursor, cursor_order, stops} - stops are params without a value: [{name, offset, length, choices}]
 # cursor_order is the position of |CURSOR| among the stops (-0.5 before the first one, 0.5 between the first and the second, ...)
 # a param without a value is filled with its default (or its name) and becomes a tab stop
 # {@name} is replaced with variables[name], an unknown variable stays as it is
 static func expand(body: String, values: Array = [], indent: String = "", indent_unit: String = "\t", selection: String = "", variables: Dictionary = {}) -> Dictionary:
 	var params := get_params(body)
 	var defaults := get_defaults(body)
+	var all_choices := get_choices(body)
 	var source := _apply_indentation(body, indent, indent_unit)
 	# without |CURSOR| the caret ends after the text
 	if not source.contains(CURSOR_MARKER):
@@ -102,8 +149,8 @@ static func expand(body: String, values: Array = [], indent: String = "", indent
 		text += source.substr(last_end, result.get_start() - last_end)
 		last_end = result.get_end()
 
-		if result.get_start(3) != -1:
-			text += str(variables.get(result.get_string(3), result.get_string()))
+		if result.get_start(4) != -1:
+			text += str(variables.get(result.get_string(4), result.get_string()))
 			continue
 
 		var param_name: String = result.get_string(1)
@@ -121,7 +168,12 @@ static func expand(body: String, values: Array = [], indent: String = "", indent
 			text += str(values[index])
 		else:
 			var placeholder: String = defaults.get(param_name, param_name)
-			stops.append({"name": param_name, "offset": text.length(), "length": placeholder.length()})
+			stops.append({
+				"name": param_name,
+				"offset": text.length(),
+				"length": placeholder.length(),
+				"choices": all_choices.get(param_name, PackedStringArray()),
+			})
 			text += placeholder
 
 	text += source.substr(last_end)

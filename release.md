@@ -4,6 +4,10 @@
 - Variables in templates: `{@filename}` (the script's file name), `{@class}` (the same in PascalCase)
   and `{@date}` (today, `YYYY-MM-DD`). They are filled in when the template is inserted and shown
   in the preview. The `@` keeps them apart from parameters, so existing templates are not affected.
+- Parameters with choices: `{name|a,b,c}`. The first choice is the default. When the parameter is selected,
+  the choices are listed under it, `Up` / `Down` change the value, `Tab` or `Enter` confirm it and go on,
+  a click picks one, typing your own value still works. The built-in templates `export`, `exprange`, `const`,
+  `prop`, `propget`, `propset`, `func`, `static` and `ims` use them, they expand to the same code as before.
 - New templates `classf` (`class_name` from the file name and `extends`) and `todod` (TODO with the date).
 - The template editor shows a live preview of the expanded template under the code.
 - How many times a template was used is saved a few seconds after the last insertion and when the plugin

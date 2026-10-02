@@ -262,6 +262,7 @@ func _build_help() -> Control:
 	var help := Label.new()
 	help.text = "{name} - parameter, filled from words typed after the keyword or selected with Tab after expansion\n" \
 		+ "{name=value} - parameter with a default value\n" \
+		+ "{name|a,b,c} - parameter with choices, the first is the default, change it with the up and down arrows\n" \
 		+ "{selection} - the selected code, when the template is inserted with a selection\n" \
 		+ "{@filename} {@class} {@date} - the script's file name, its class name and today's date\n" \
 		+ "|CURSOR| - caret position after expansion\n" \
@@ -409,11 +410,7 @@ func _fill_category_menu() -> void:
 
 func _update_params_info() -> void:
 	var body := _body.text
-	var params := Expander.get_params(body)
-	var defaults := Expander.get_defaults(body)
-	var described := PackedStringArray()
-	for param in params:
-		described.append("%s = %s" % [param, defaults[param]] if defaults.has(param) else param)
+	var described := Expander.describe_params(body)
 	var lines := PackedStringArray(["Parameters: " + (", ".join(described) if not described.is_empty() else "none")])
 	if Expander.uses_selection(body):
 		lines.append("Wraps the selected code.")

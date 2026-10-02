@@ -4,11 +4,15 @@ extends RefCounted
 # Tab stops after expansion. Tab copies the value to other occurrences of the
 # parameter and selects the next one, Shift+Tab the previous one, the last Tab jumps to |CURSOR|.
 # Ends when the caret leaves the parameter (the value is still copied) or the line count changes.
+# A parameter with choices ({name|a,b}) can be changed to its next or previous choice.
+
+# the session is over, for any reason
+signal finished
 
 var text_edit: TextEdit
 var active: bool = false
 
-var _stops: Array[Dictionary] = []  # {name, line, column, length, order}
+var _stops: Array[Dictionary] = []  # {name, line, column, length, order, choices}
 var _primary: Array[int] = []       # first occurrence of each parameter
 var _cursor: Dictionary             # final caret position
 var _current: int = -1
@@ -23,10 +27,16 @@ func _init(p_text_edit: TextEdit, expanded: Dictionary, start_line: int, start_c
 		var pos := _offset_to_position(text, stop.offset, start_line, start_column)
 		if not _stops.any(func(s): return s.name == stop.name):
 			_primary.append(_stops.size())
-		_stops.append({"name": stop.name, "line": pos.x, "column": pos.y, "length": stop.length, "order": _stops.size()})
+		_stops.append({
+			"name": stop.name, "line": pos.x, "column": pos.y, "length": stop.length, "order": _stops.size(),
+			"choices": stop.get("choices", PackedStringArray()),
+		})
 
 	var cursor_pos := _offset_to_position(text, expanded.cursor, start_line, start_column)
-	_cursor = {"name": "", "line": cursor_pos.x, "column": cursor_pos.y, "length": 0, "order": expanded.cursor_order}
+	_cursor = {
+		"name": "", "line": cursor_pos.x, "column": cursor_pos.y, "length": 0, "order": expanded.cursor_order,
+		"choices": PackedStringArray(),
+	}
 	_stops.append(_cursor)
 
 func start() -> void:
@@ -75,9 +85,55 @@ func finish() -> void:
 	_stop()
 
 func _stop() -> void:
+	var was_active := active
 	active = false
 	if is_instance_valid(text_edit) and text_edit.caret_changed.is_connected(_on_caret_changed):
 		text_edit.caret_changed.disconnect(_on_caret_changed)
+	if was_active:
+		finished.emit()
+
+# the choices of the selected parameter, empty when it has none
+func current_choices() -> PackedStringArray:
+	return _current_stop().choices if active else PackedStringArray()
+
+# where the selected parameter starts as (line, column)
+func current_position() -> Vector2i:
+	var stop := _current_stop()
+	return Vector2i(stop.line, stop.column)
+
+# index of the text of the selected parameter among its choices, -1 when it is something else
+func current_choice_index() -> int:
+	if not active:
+		return -1
+	var stop := _current_stop()
+	return current_choices().find(text_edit.get_line(stop.line).substr(stop.column, stop.length + _current_delta()))
+
+# replaces the text of the selected parameter with the next (step 1) or previous (step -1) choice,
+# returns true when the text was changed
+func cycle_choice(step: int) -> bool:
+	var choices := current_choices()
+	if choices.is_empty():
+		return false
+	var index := current_choice_index()
+	if index == -1:
+		index = 0 if step > 0 else choices.size() - 1
+	else:
+		index = posmod(index + step, choices.size())
+	return choose(index)
+
+# replaces the text of the selected parameter with the choice, returns true when the text was changed
+func choose(index: int) -> bool:
+	var choices := current_choices()
+	if index < 0 or index >= choices.size() or not _is_caret_in_current():
+		return false
+	var stop := _current_stop()
+	var value := choices[index]
+	text_edit.begin_complex_operation()
+	text_edit.remove_text(stop.line, stop.column, stop.line, stop.column + stop.length + _current_delta())
+	text_edit.insert_text(value, stop.line, stop.column)
+	text_edit.end_complex_operation()
+	text_edit.select(stop.line, stop.column, stop.line, stop.column + value.length())
+	return true
 
 # clicking or moving elsewhere ends the session, the typed value still goes to the other occurrences
 func _on_caret_changed() -> void:

@@ -75,3 +75,33 @@ func test_expand_variables() -> void:
 	check("preview", Expander.get_preview("{@class}", [], "", variables), "Player")
 	check("cursor after a variable", Expander.expand("{@class}|CURSOR|x", [], "", "\t", "", variables).cursor, 6)
 	check("a parameter with the same name is independent", Expander.expand("{class} {@class}", ["A"], "", "\t", "", variables).text, "A Player")
+
+func test_get_choices() -> void:
+	check("trimmed, empty ones dropped, the first occurrence wins",
+		Expander.get_choices("{t|int, float ,,String} {t|x,y} {u} {v|}"), {"t": PackedStringArray(["int", "float", "String"])})
+	check("a choice parameter is a normal parameter", Expander.get_params("{t|a,b} {u} {t}"), PackedStringArray(["t", "u"]))
+
+func test_choices_default_is_the_first_one() -> void:
+	check("default", Expander.get_defaults("{t|int,float}"), {"t": "int"})
+	check("placeholder", Expander.expand("var x: {t|int,float}").text, "var x: int")
+	check("an explicit default wins", Expander.get_defaults("{t=a} {t|b,c}"), {"t": "a"})
+	check("empty choices are a plain parameter", Expander.expand("{t|}").text, "t")
+
+func test_choices_in_stops() -> void:
+	var result = Expander.expand("{t|int,float} {u} {t}")
+	check("stop with choices", result.stops[0].choices, PackedStringArray(["int", "float"]))
+	check("stop without choices", result.stops[1].choices, PackedStringArray())
+	check("the same parameter has the same choices", result.stops[2].choices, PackedStringArray(["int", "float"]))
+	check("length of the default", result.stops[0].length, 3)
+
+func test_choices_with_values_and_cursor() -> void:
+	check("a given value replaces the choice", Expander.expand("{t|int,float}", ["bool"]).text, "bool")
+	var result = Expander.expand("{t|a,b}|CURSOR|x")
+	check("cursor", result.cursor, 1)
+	check("text", result.text, "ax")
+
+func test_describe_params() -> void:
+	var body := "{a} {b=1} {c|x,y} {d}"
+	check("as shown", Expander.describe_params(body), PackedStringArray(["a", "b (default: 1)", "c (x | y)", "d"]))
+	check("given values come first", Expander.describe_params(body, ["5", "6"]), PackedStringArray(["a = 5", "b = 6", "c (x | y)", "d"]))
+	check("none", Expander.describe_params("x"), PackedStringArray())

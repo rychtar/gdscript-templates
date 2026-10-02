@@ -9,6 +9,7 @@ const TabStopSession = preload("res://addons/gdscript-templates/scripts/tab_stop
 const TemplateInserter = preload("res://addons/gdscript-templates/scripts/template_inserter.gd")
 const TemplateVariables = preload("res://addons/gdscript-templates/scripts/template_variables.gd")
 const CaretContext = preload("res://addons/gdscript-templates/scripts/caret_context.gd")
+const ChoicePopup = preload("res://addons/gdscript-templates/scripts/choice_popup.gd")
 const CompletionPopup = preload("res://addons/gdscript-templates/scripts/completion_popup.gd")
 const TemplateEditorDialog = preload("res://addons/gdscript-templates/scripts/template_editor_dialog.gd")
 
@@ -25,6 +26,8 @@ var store: TemplateStore
 var session: TabStopSession
 var popup: CompletionPopup
 var _usage_timer: Timer
+# the choices of the selected parameter, {name|a,b}
+var _choice_popup: ChoicePopup
 var hooked_text_edits: Dictionary = {}
 
 func _enter_tree() -> void:
@@ -52,6 +55,7 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	remove_tool_menu_item(TOOL_MENU_ITEM)
 	_close_templates_popup()
+	_close_choice_popup()
 	store.save_usage()
 
 	var editor_settings := EditorInterface.get_editor_settings()
@@ -131,15 +135,56 @@ func _handle_tab_stop_key(event: InputEventKey, text_edit: TextEdit) -> bool:
 	if event.keycode == KEY_ESCAPE:
 		session.finish()
 		return false
-	if event.keycode != KEY_TAB or _is_code_completion_active(text_edit) \
-			or event.ctrl_pressed or event.alt_pressed or event.meta_pressed:
+	if _is_code_completion_active(text_edit) or event.ctrl_pressed or event.alt_pressed or event.meta_pressed:
+		return false
+	if _handle_choice_key(event, text_edit):
+		return true
+	if event.keycode != KEY_TAB:
 		return false
 
 	var consumed := session.previous() if event.shift_pressed else session.next()
 	if consumed:
 		text_edit.accept_event()
 		_cancel_code_completion_later(text_edit)
+		_update_choice_popup(text_edit)
 	return true
+
+# on a parameter with choices: Up and Down change the choice, Enter confirms it like Tab
+func _handle_choice_key(event: InputEventKey, text_edit: TextEdit) -> bool:
+	if event.shift_pressed or session.current_choices().is_empty():
+		return false
+	var done := false
+	match event.keycode:
+		KEY_UP:
+			done = session.cycle_choice(-1)
+		KEY_DOWN:
+			done = session.cycle_choice(1)
+		KEY_ENTER, KEY_KP_ENTER:
+			done = session.next()
+	if done:
+		text_edit.accept_event()
+		_update_choice_popup(text_edit)
+	return done
+
+# shows the choices of the selected parameter, closes the list when it has none
+func _update_choice_popup(text_edit: TextEdit) -> void:
+	var choices := session.current_choices() if session else PackedStringArray()
+	if choices.is_empty():
+		_close_choice_popup()
+		return
+	if not is_instance_valid(_choice_popup):
+		_choice_popup = ChoicePopup.new()
+		_choice_popup.choice_picked.connect(_on_choice_picked)
+	_choice_popup.show_choices(text_edit, session.current_position(), choices, session.current_choice_index())
+
+func _on_choice_picked(index: int) -> void:
+	if session and session.choose(index):
+		_update_choice_popup(session.text_edit)
+
+func _close_choice_popup() -> void:
+	if is_instance_valid(_choice_popup):
+		_choice_popup.close()
+	_choice_popup = null
 
 # adds the templates matching the word before the caret to the code completion popup
 func _on_code_completion_requested(text_edit: CodeEdit) -> void:
@@ -237,6 +282,9 @@ func insert_template(text_edit: TextEdit, keyword: String, from: Vector2i, to: V
 		session = null
 
 	session = TemplateInserter.insert(text_edit, store.templates[keyword].body, from, to, params, selection, _get_variables())
+	if session:
+		session.finished.connect(_close_choice_popup)
+		_update_choice_popup(text_edit)
 	store.record_use(keyword)
 	if _usage_timer.is_stopped():
 		_usage_timer.start()
