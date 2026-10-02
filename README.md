@@ -1,5 +1,7 @@
 # GDScript Templates
 
+[![Tests](https://github.com/rychtar/gdscript-templates/actions/workflows/tests.yml/badge.svg)](https://github.com/rychtar/gdscript-templates/actions/workflows/tests.yml)
+
 ![GDScript Templates](media/gdscript-templates-thumbnail.webp)
 
 Code snippets for the Godot 4 script editor. Type a keyword, press `Ctrl+E` (or pick it
