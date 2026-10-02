@@ -15,6 +15,11 @@
 
 ## Changed
 - Requires Godot 4.5 or newer (was 4.2).
+- The template editor is smaller (920 x 520). The syntax help is a compact table that opens in a small
+  panel from the **Template syntax** button, so it doesn't make the dialog bigger.
+  The empty line under the keyword only shows when there is an error.
+- Template editor: when nothing matches the filter (or there are no templates), the layout stays, with empty
+  locked fields and a hint, and **Add** is highlighted. Before, the whole right side disappeared.
 - Removed the migration of settings and templates from versions 1.0 and 1.1 (old `user://code_templates*.json`
   files, old setting names, the old "GDScript Templates Settings" menu item). Update to 1.4-1.7 first
   if you still use one of those versions.

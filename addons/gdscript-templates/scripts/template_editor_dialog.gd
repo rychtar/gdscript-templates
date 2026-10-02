@@ -18,6 +18,9 @@ const KIND_CUSTOM = "custom"
 const SCOPE_ALL = 0
 const SCOPE_PROJECT = 1
 
+# size of the dialog at the editor scale 1
+const DIALOG_SIZE = Vector2(920, 520)
+
 # shown in the preview of templates with {selection}
 const SAMPLE_SELECTION = "# selected code"
 
@@ -42,6 +45,10 @@ var _remove_button: Button
 var _details: Control
 var _keyword: LineEdit
 var _keyword_error: Label
+var _keyword_error_spacer: Control
+var _add_button: Button
+var _help_button: Button
+var _help_popup: PopupPanel
 var _description: LineEdit
 var _category: LineEdit
 var _category_menu: MenuButton
@@ -84,7 +91,7 @@ func setup(defaults: Dictionary, user: Dictionary, project: Dictionary, use_defa
 
 # window = null opens the dialog in the main editor window
 func show_dialog(window: Window = null) -> void:
-	var dialog_size := Vector2i(Vector2(1000, 640) * EditorInterface.get_editor_scale())
+	var dialog_size := Vector2i(DIALOG_SIZE * EditorInterface.get_editor_scale())
 	if window and window != EditorInterface.get_base_control().get_window():
 		window.add_child(self)
 		popup_centered(dialog_size)
@@ -164,7 +171,8 @@ func _build_list_panel() -> Control:
 
 	var buttons := HBoxContainer.new()
 	left.add_child(buttons)
-	buttons.add_child(_create_button("Add", "Add", _on_add_pressed))
+	_add_button = _create_button("Add", "Add", _on_add_pressed)
+	buttons.add_child(_add_button)
 	_duplicate_button = _create_button("Duplicate", "Duplicate", _on_duplicate_pressed)
 	buttons.add_child(_duplicate_button)
 	_remove_button = _create_button("Delete", "Remove", _on_remove_pressed)
@@ -183,10 +191,12 @@ func _build_fields() -> Control:
 	_keyword.text_changed.connect(_on_keyword_changed)
 	grid.add_child(_keyword)
 
-	grid.add_child(Control.new())
+	_keyword_error_spacer = Control.new()
+	grid.add_child(_keyword_error_spacer)
 	_keyword_error = Label.new()
 	_keyword_error.add_theme_color_override("font_color", editor_theme.get_color("error_color", "Editor"))
 	grid.add_child(_keyword_error)
+	_set_keyword_error("")
 
 	grid.add_child(_create_label("Description"))
 	_description = LineEdit.new()
@@ -233,7 +243,7 @@ func _build_editors() -> Control:
 
 	_body = CodeEdit.new()
 	_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_body.custom_minimum_size = Vector2(0, 120) * scale
+	_body.custom_minimum_size = Vector2(0, 90) * scale
 	_body.gutters_draw_line_numbers = true
 	_body.indent_use_spaces = false
 	_body.syntax_highlighter = Settings.create_gdscript_highlighter()
@@ -252,24 +262,93 @@ func _build_editors() -> Control:
 	_preview.focus_mode = Control.FOCUS_NONE
 	_preview.context_menu_enabled = false
 	_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_preview.custom_minimum_size = Vector2(0, 80) * scale
+	_preview.custom_minimum_size = Vector2(0, 60) * scale
 	_preview.syntax_highlighter = Settings.create_gdscript_highlighter()
 	_use_code_font(_preview)
 	preview_box.add_child(_preview)
 	return editors
 
+# the syntax reference opens in a small panel above the button, so the dialog keeps its size
 func _build_help() -> Control:
-	var help := Label.new()
-	help.text = "{name} - parameter, filled from words typed after the keyword or selected with Tab after expansion\n" \
-		+ "{name=value} - parameter with a default value\n" \
-		+ "{name|a,b,c} - parameter with choices, the first is the default, change it with the up and down arrows\n" \
-		+ "{selection} - the selected code, when the template is inserted with a selection\n" \
-		+ "{@filename} {@class} {@date} - the script's file name, its class name and today's date\n" \
-		+ "|CURSOR| - caret position after expansion\n" \
-		+ "Options and shortcuts: Editor Settings > Plugins > GDScript Templates (enable Advanced Settings)"
-	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help.modulate.a = 0.6
-	return help
+	_help_button = Button.new()
+	_help_button.text = "Template syntax"
+	var editor_theme := EditorInterface.get_editor_theme()
+	_help_button.icon = editor_theme.get_icon("NodeInfo" if editor_theme.has_icon("NodeInfo", "EditorIcons") else "Help", "EditorIcons")
+	_help_button.flat = true
+	_help_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_help_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_help_button.pressed.connect(_show_help)
+
+	_help_popup = _build_help_popup()
+	add_child(_help_popup)
+	return _help_button
+
+func _build_help_popup() -> PopupPanel:
+	var scale := EditorInterface.get_editor_scale()
+	var editor_theme := EditorInterface.get_editor_theme()
+
+	var margin := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, int(10 * scale))
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", int(6 * scale))
+	margin.add_child(box)
+
+	var title := Label.new()
+	title.text = "Template syntax"
+	title.add_theme_color_override("font_color", editor_theme.get_color("accent_color", "Editor"))
+	box.add_child(title)
+
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", int(18 * scale))
+	box.add_child(grid)
+	for row in [
+		["{name}", "parameter, filled from the words after the keyword"],
+		["{name=value}", "parameter with a default value"],
+		["{name|a,b,c}", "parameter with choices, the first is the default"],
+		["{selection}", "the selected code"],
+		["{@filename}", "file name of the script"],
+		["{@class}", "the same as a class name (PlayerController)"],
+		["{@date}", "today's date"],
+		["|CURSOR|", "caret position after expansion"],
+	]:
+		var syntax := Label.new()
+		syntax.text = row[0]
+		_use_code_font(syntax)
+		grid.add_child(syntax)
+		var meaning := Label.new()
+		meaning.text = row[1]
+		meaning.modulate.a = 0.7
+		grid.add_child(meaning)
+
+	var more := Label.new()
+	more.text = "Shortcuts: Editor Settings > Plugins > GDScript Templates"
+	more.modulate.a = 0.5
+	box.add_child(more)
+
+	# a frame so the panel doesn't blend into the dialog
+	var style := StyleBoxFlat.new()
+	style.bg_color = editor_theme.get_color("base_color", "Editor").lightened(0.06)
+	style.border_color = editor_theme.get_color("accent_color", "Editor")
+	style.set_border_width_all(1)
+	style.border_width_left = int(3 * scale)
+	style.set_corner_radius_all(int(3 * scale))
+	style.shadow_color = Color(0, 0, 0, 0.4)
+	style.shadow_size = int(8 * scale)
+
+	var popup := PopupPanel.new()
+	popup.add_theme_stylebox_override("panel", style)
+	popup.add_child(margin)
+	return popup
+
+# above the button, as far left as it fits in the dialog
+func _show_help() -> void:
+	var help_size := Vector2i(_help_popup.get_contents_minimum_size())
+	var button_rect := Rect2i(_help_button.get_global_rect())
+	var left := clampi(button_rect.position.x, 0, maxi(size.x - help_size.x, 0))
+	var top := maxi(button_rect.position.y - help_size.y - 4, 0)
+	_help_popup.popup_on_parent(Rect2i(Vector2i(left, top), help_size))
 
 # the font of the script editor
 func _use_code_font(control: Control) -> void:
@@ -353,10 +432,14 @@ func _refresh_list(select_keyword: String = _selected) -> void:
 func _load(keyword: String) -> void:
 	_updating = true
 	_selected = keyword
-	_details.visible = not keyword.is_empty()
-	_keyword_error.text = ""
+	_set_keyword_error("")
 
-	if not keyword.is_empty():
+	if keyword.is_empty():
+		_keyword.text = ""
+		_description.text = ""
+		_category.text = ""
+		_body.text = ""
+	else:
 		var entry := _get_entry(keyword)
 		_keyword.text = keyword
 		_description.text = entry.description
@@ -371,8 +454,14 @@ func _load(keyword: String) -> void:
 	_updating = false
 
 func _update_state() -> void:
-	var kind := _kind(_selected) if not _selected.is_empty() else ""
+	var has_selection := not _selected.is_empty()
+	var kind := _kind(_selected) if has_selection else ""
+	# nothing selected (no match, no templates): the fields stay, empty and locked
 	_keyword.editable = kind == KIND_CUSTOM
+	_description.editable = has_selection
+	_category.editable = has_selection
+	_category_menu.disabled = not has_selection
+	_body.editable = has_selection
 	match kind:
 		KIND_DEFAULT:
 			_status.text = "Default template - your changes are saved as your own version."
@@ -380,9 +469,14 @@ func _update_state() -> void:
 			_status.text = "Modified default template - use Revert to restore the original."
 		KIND_CUSTOM:
 			_status.text = "Custom template."
+		_:
+			var query := _search.text.strip_edges()
+			_status.text = ("No template matches \"%s\". " % query if not query.is_empty() else "No templates. ") \
+				+ "Click Add to create one."
+	_highlight_add_button(not has_selection)
 
 	# a default template gets a scope when it's changed
-	_scope.disabled = kind == KIND_DEFAULT
+	_scope.disabled = kind == KIND_DEFAULT or not has_selection
 	_scope.select(SCOPE_PROJECT if _project.has(_selected) else SCOPE_ALL)
 	_update_params_info()
 
@@ -395,6 +489,28 @@ func _update_state() -> void:
 	var index := _keys.find(_selected)
 	if index != -1:
 		_list.set_item_text(index, _item_text(_selected))
+
+# the empty line under the keyword only takes room when there is an error to show
+func _set_keyword_error(text: String) -> void:
+	_keyword_error.text = text
+	_keyword_error.visible = not text.is_empty()
+	_keyword_error_spacer.visible = not text.is_empty()
+
+# points at Add when there is nothing to edit
+func _highlight_add_button(on: bool) -> void:
+	var states := ["normal", "hover", "pressed"]
+	if not on:
+		for state in states:
+			_add_button.remove_theme_stylebox_override(state)
+		return
+	var editor_theme := EditorInterface.get_editor_theme()
+	var accent := editor_theme.get_color("accent_color", "Editor")
+	var colors := {"normal": accent.darkened(0.3), "hover": accent, "pressed": accent.darkened(0.5)}
+	for state in states:
+		var style := editor_theme.get_stylebox(state, "Button").duplicate()
+		if style is StyleBoxFlat:
+			style.bg_color = colors[state]
+		_add_button.add_theme_stylebox_override(state, style)
 
 func _fill_category_menu() -> void:
 	var categories := PackedStringArray()
@@ -437,10 +553,10 @@ func _on_scope_selected(index: int) -> void:
 		return
 	# don't overwrite the template that is already there
 	if to.has(_selected):
-		_keyword_error.text = "\"%s\" already exists in \"%s\"." % [_selected, _scope.get_item_text(index)]
+		_set_keyword_error("\"%s\" already exists in \"%s\"." % [_selected, _scope.get_item_text(index)])
 		_scope.select(SCOPE_PROJECT if is_same(from, _project) else SCOPE_ALL)
 		return
-	_keyword_error.text = ""
+	_set_keyword_error("")
 	to[_selected] = from[_selected]
 	from.erase(_selected)
 	_update_state()
@@ -450,7 +566,7 @@ func _on_keyword_changed(new_text: String) -> void:
 		return
 	var keyword := new_text.strip_edges()
 	var error := _validate_keyword(keyword)
-	_keyword_error.text = error
+	_set_keyword_error(error)
 	if not error.is_empty() or keyword == _selected:
 		return
 
