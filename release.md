@@ -1,4 +1,4 @@
-# Unreleased
+# 1.8
 
 ## Added
 - Variables in templates: `{@filename}` (the script's file name), `{@class}` (the same in PascalCase)
