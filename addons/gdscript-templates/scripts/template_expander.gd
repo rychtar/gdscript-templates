@@ -9,7 +9,6 @@ extends RefCounted
 #   \t              one indent level (converted to spaces if needed)
 
 const CURSOR = "CURSOR"
-const CURSOR_MARKER = "|CURSOR|"
 const SELECTION = "selection"
 const PLACEHOLDER_PATTERN = "\\|CURSOR\\||\\{([A-Za-z_][A-Za-z0-9_]*)(?:=([^{}\\n]*))?\\}"
 
@@ -70,7 +69,8 @@ static func _is_param(param_name: String) -> bool:
 static func get_preview(body: String, values: Array = [], selection: String = "") -> String:
 	return expand(body, values, "", "\t", selection).text
 
-# returns {text, cursor, stops} - stops are params without a value: [{name, offset, length}]
+# returns {text, cursor, cursor_order, stops} - stops are params without a value: [{name, offset, length}]
+# cursor_order is the position of |CURSOR| among the stops (-0.5 before the first one, 0.5 between the first and the second, ...)
 # a param without a value is filled with its default (or its name) and becomes a tab stop
 static func expand(body: String, values: Array = [], indent: String = "", indent_unit: String = "\t", selection: String = "") -> Dictionary:
 	var params = get_params(body)
@@ -80,6 +80,7 @@ static func expand(body: String, values: Array = [], indent: String = "", indent
 	var text = ""
 	var stops: Array[Dictionary] = []
 	var cursor = -1
+	var cursor_order = 0.0
 	var last_end = 0
 
 	for result in _get_regex().search_all(source):
@@ -90,6 +91,7 @@ static func expand(body: String, values: Array = [], indent: String = "", indent
 		if param_name.is_empty() or param_name == CURSOR:
 			if cursor == -1:
 				cursor = text.length()
+				cursor_order = stops.size() - 0.5
 			continue
 		if param_name == SELECTION:
 			text += _indent_lines(selection, _line_indent(text))
@@ -106,8 +108,9 @@ static func expand(body: String, values: Array = [], indent: String = "", indent
 	text += source.substr(last_end)
 	if cursor == -1:
 		cursor = text.length()
+		cursor_order = stops.size() - 0.5
 
-	return {"text": text, "stops": stops, "cursor": cursor}
+	return {"text": text, "stops": stops, "cursor": cursor, "cursor_order": cursor_order}
 
 # leading whitespace of the last line of text
 static func _line_indent(text: String) -> String:

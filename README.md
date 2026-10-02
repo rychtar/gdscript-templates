@@ -34,7 +34,8 @@ skip get their default value (or their name) and are selected one by one:
 `vec 10` gives `Vector2(10, 0)` with `0` selected, so you can type its value and
 press `Tab` to go to the next one. A parameter used more than once (like `{name}`
 in `prop`) only needs to be typed once. Put a value with spaces in quotes:
-`func move "delta: float"`.
+`func move "delta: float"`. Quotes also keep a value that is itself a keyword from being
+taken for the template: `if "input"`.
 
 Select some code and press `Ctrl+E` (or `Ctrl+Space`) to wrap it in a template:
 `if`, `ife`, `for`, `fori`, `while`, `region`, `isval`, `isnull`, `dicthas` and
@@ -97,14 +98,6 @@ shows plugin settings when **Advanced Settings** (top right) is turned on.
 `Ctrl+Space` replaces Godot's own "request code completion" shortcut in the script
 editor. On macOS it is also used to switch keyboard languages, so it may not reach
 Godot at all. If either is a problem, set a different **Show Templates Shortcut**.
-
-## Screenshots
-
-![Keyword + Preview Window](https://github.com/rychtar/gdscript-templates/blob/main/addons/gdscript-templates/images/keyword.png?raw=true)
-
-![Completed code](https://github.com/rychtar/gdscript-templates/blob/main/addons/gdscript-templates/images/expanded.png?raw=true)
-
-![Default Templates](https://github.com/rychtar/gdscript-templates/blob/main/addons/gdscript-templates/images/templates.png?raw=true)
 
 ## License
 
