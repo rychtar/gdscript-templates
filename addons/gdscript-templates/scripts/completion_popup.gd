@@ -295,33 +295,50 @@ func _refilter() -> void:
 		var index := _keys.find(_picked_keyword) if not _picked_keyword.is_empty() else -1
 		_select(index if index != -1 else _next_item(0, 1))
 
-# templates that take all the typed values (and wrap the selection) first,
-# then by the kind of match (exact, prefix, ...), the most used, how well the keyword matches
 func _add_scored(query: String) -> void:
+	for keyword in rank_templates(_templates, query, _usage, _param_count, _selection):
+		_add_template(keyword)
+
+# keywords of the templates matching the query, the best first: templates that take all the typed values
+# (and wrap the selection) first, then by the kind of match (exact, prefix, ...), the most used,
+# how well the keyword matches
+static func rank_templates(templates: Dictionary, query: String, usage: Dictionary, param_count: int, selection: String) -> Array[String]:
 	var scored: Array[Array] = []
-	for keyword in _templates:
-		var entry: Dictionary = _templates[keyword]
+	for keyword in templates:
+		var entry: Dictionary = templates[keyword]
 		var score := match_score(query, keyword, entry.description + "\n" + entry.category)
 		if score >= 0:
-			var fits := Expander.get_params(entry.body).size() >= _param_count
-			if not _selection.is_empty() and not Expander.uses_selection(entry.body):
+			var fits := Expander.get_params(entry.body).size() >= param_count
+			if not selection.is_empty() and not Expander.uses_selection(entry.body):
 				fits = false
-			scored.append([1 if fits else 0, match_kind(score), int(_usage.get(keyword, 0)), score, keyword])
+			scored.append([1 if fits else 0, match_kind(score), int(usage.get(keyword, 0)), score, keyword])
 	scored.sort_custom(func(a, b):
 		for i in 4:
 			if a[i] != b[i]:
 				return a[i] > b[i]
 		return a[4] < b[4]
 	)
+	var keywords: Array[String] = []
 	for item in scored:
-		_add_template(item[4])
+		keywords.append(item[4])
+	return keywords
+
+# the templates used at least once, the most used first (the same count: alphabetically)
+static func most_used(templates: Dictionary, usage: Dictionary, count: int) -> Array[String]:
+	var used: Array[String] = []
+	for keyword in usage:
+		if templates.has(keyword) and int(usage[keyword]) > 0:
+			used.append(keyword)
+	used.sort_custom(func(a, b):
+		return int(usage[a]) > int(usage[b]) or (int(usage[a]) == int(usage[b]) and a < b)
+	)
+	return used.slice(0, count)
 
 func _add_grouped() -> void:
-	var used := _usage.keys().filter(func(keyword): return _templates.has(keyword) and int(_usage[keyword]) > 0)
-	used.sort_custom(func(a, b): return int(_usage[a]) > int(_usage[b]))
+	var used := most_used(_templates, _usage, MOST_USED_COUNT)
 	if not used.is_empty():
 		_add_header("Most Used")
-		for keyword in used.slice(0, MOST_USED_COUNT):
+		for keyword in used:
 			_add_template(keyword)
 
 	for category in _categories:

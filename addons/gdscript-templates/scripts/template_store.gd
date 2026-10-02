@@ -20,10 +20,17 @@ var defaults: Dictionary = {}
 var user: Dictionary = {}
 var project: Dictionary = {}
 var usage: Dictionary = {}
+# the counts changed since they were saved
+var _usage_dirty: bool = false
 var use_defaults: bool = true
 
 # defaults merged with user and project templates
 var templates: Dictionary = {}
+
+# the files, the editor's folders unless set before load_templates() (tests use temporary files)
+var user_path: String = ""
+var project_path: String = ""
+var usage_path: String = ""
 
 # modified times of the files when they were loaded, to reload them after a change
 var _loaded_times: Dictionary = {}
@@ -43,9 +50,15 @@ static func _get_usage_path() -> String:
 func load_templates() -> void:
 	defaults = normalize(FileUtils.load_json_file(DEFAULTS_PATH))
 
-	user = _load(get_user_path())
-	project = _load(get_project_path())
-	usage = FileUtils.load_json_file(_get_usage_path())
+	if user_path.is_empty():
+		user_path = get_user_path()
+	if project_path.is_empty():
+		project_path = get_project_path()
+	if usage_path.is_empty():
+		usage_path = _get_usage_path()
+	user = _load(user_path)
+	project = _load(project_path)
+	usage = FileUtils.load_json_file(usage_path)
 	rebuild()
 
 func _load(path: String) -> Dictionary:
@@ -58,12 +71,12 @@ static func _modified_time(path: String) -> int:
 # picks up changes made to the files outside the plugin, returns true when something was reloaded
 func reload_if_changed() -> bool:
 	var changed := false
-	for path in [get_user_path(), get_project_path()]:
+	for path in [user_path, project_path]:
 		if _modified_time(path) != _loaded_times.get(path, 0):
 			changed = true
 	if changed:
-		user = _load(get_user_path())
-		project = _load(get_project_path())
+		user = _load(user_path)
+		project = _load(project_path)
 		rebuild()
 		Debug.info("✓ Templates reloaded")
 	return changed
@@ -108,10 +121,10 @@ func save_templates(new_user: Dictionary, new_project: Dictionary) -> bool:
 	project = new_project.duplicate(true)
 	rebuild()
 
-	var ok := _save(user, get_user_path())
+	var ok := _save(user, user_path)
 	# no empty project file in projects without project templates
-	if not project.is_empty() or FileAccess.file_exists(get_project_path()):
-		ok = _save(project, get_project_path()) and ok
+	if not project.is_empty() or FileAccess.file_exists(project_path):
+		ok = _save(project, project_path) and ok
 	return ok
 
 func _save(entries: Dictionary, path: String) -> bool:
@@ -119,9 +132,15 @@ func _save(entries: Dictionary, path: String) -> bool:
 	_loaded_times[path] = _modified_time(path)
 	return ok
 
+# counts the use, save_usage() writes it to the file
 func record_use(keyword: String) -> void:
 	usage[keyword] = int(usage.get(keyword, 0)) + 1
-	FileUtils.save_json_file(usage, _get_usage_path())
+	_usage_dirty = true
+
+func save_usage() -> void:
+	if _usage_dirty:
+		_usage_dirty = false
+		FileUtils.save_json_file(usage, usage_path)
 
 # case insensitive unless case_sensitive, "" when not found
 func find_keyword(word: String, case_sensitive: bool = false) -> String:

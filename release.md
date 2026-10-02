@@ -6,6 +6,8 @@
   in the preview. The `@` keeps them apart from parameters, so existing templates are not affected.
 - New templates `classf` (`class_name` from the file name and `extends`) and `todod` (TODO with the date).
 - The template editor shows a live preview of the expanded template under the code.
+- How many times a template was used is saved a few seconds after the last insertion and when the plugin
+  is turned off, not after every insertion.
 
 ## Changed
 - Requires Godot 4.5 or newer (was 4.2).
@@ -14,6 +16,7 @@
   if you still use one of those versions.
 
 ## Fixed
+- The most used templates in the browser are listed alphabetically when they were used the same number of times.
 - Template editor: changing **Available in** no longer overwrites a template with the same keyword
   in the other file, it shows a message instead.
 

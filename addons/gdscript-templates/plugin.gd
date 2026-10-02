@@ -18,10 +18,13 @@ const TOOL_MENU_ITEM = "GDScript Templates..."
 const COMPLETION_MARKER = "gdscript_templates:"
 # templates are offered in code completion after this many typed characters
 const COMPLETION_MIN_PREFIX = 2
+# the usage counts are written to the file this many seconds after the last insertion
+const USAGE_SAVE_DELAY = 5.0
 
 var store: TemplateStore
 var session: TabStopSession
 var popup: CompletionPopup
+var _usage_timer: Timer
 var hooked_text_edits: Dictionary = {}
 
 func _enter_tree() -> void:
@@ -30,6 +33,11 @@ func _enter_tree() -> void:
 	store = TemplateStore.new()
 	store.use_defaults = Settings.use_default_templates()
 	store.load_templates()
+	_usage_timer = Timer.new()
+	_usage_timer.one_shot = true
+	_usage_timer.wait_time = USAGE_SAVE_DELAY
+	_usage_timer.timeout.connect(store.save_usage)
+	add_child(_usage_timer)
 	EditorInterface.get_editor_settings().settings_changed.connect(_on_editor_settings_changed)
 
 	add_tool_menu_item(TOOL_MENU_ITEM, _open_template_editor)
@@ -44,6 +52,7 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	remove_tool_menu_item(TOOL_MENU_ITEM)
 	_close_templates_popup()
+	store.save_usage()
 
 	var editor_settings := EditorInterface.get_editor_settings()
 	if editor_settings.settings_changed.is_connected(_on_editor_settings_changed):
@@ -99,16 +108,8 @@ func _on_text_edit_gui_input(event: InputEvent, text_edit: TextEdit) -> void:
 		text_edit.accept_event()
 		return
 
-	if session and session.active and session.text_edit == text_edit:
-		if event.keycode == KEY_TAB and not _is_code_completion_active(text_edit) \
-				and not (event.ctrl_pressed or event.alt_pressed or event.meta_pressed):
-			var consumed := session.previous() if event.shift_pressed else session.next()
-			if consumed:
-				text_edit.accept_event()
-				_cancel_code_completion_later(text_edit)
-			return
-		elif event.keycode == KEY_ESCAPE:
-			session.finish()
+	if _handle_tab_stop_key(event, text_edit):
+		return
 
 	if event.echo:
 		return
@@ -121,6 +122,24 @@ func _on_text_edit_gui_input(event: InputEvent, text_edit: TextEdit) -> void:
 	elif Settings.matches_shortcut(Settings.SHORTCUT_SHOW, event):
 		text_edit.accept_event()
 		show_templates_popup(text_edit)
+
+# Tab and Shift+Tab move between the parameters of the inserted template, Esc ends it
+# returns true when the key is dealt with
+func _handle_tab_stop_key(event: InputEventKey, text_edit: TextEdit) -> bool:
+	if not (session and session.active and session.text_edit == text_edit):
+		return false
+	if event.keycode == KEY_ESCAPE:
+		session.finish()
+		return false
+	if event.keycode != KEY_TAB or _is_code_completion_active(text_edit) \
+			or event.ctrl_pressed or event.alt_pressed or event.meta_pressed:
+		return false
+
+	var consumed := session.previous() if event.shift_pressed else session.next()
+	if consumed:
+		text_edit.accept_event()
+		_cancel_code_completion_later(text_edit)
+	return true
 
 # adds the templates matching the word before the caret to the code completion popup
 func _on_code_completion_requested(text_edit: CodeEdit) -> void:
@@ -219,6 +238,8 @@ func insert_template(text_edit: TextEdit, keyword: String, from: Vector2i, to: V
 
 	session = TemplateInserter.insert(text_edit, store.templates[keyword].body, from, to, params, selection, _get_variables())
 	store.record_use(keyword)
+	if _usage_timer.is_stopped():
+		_usage_timer.start()
 
 	text_edit.grab_focus()
 	_cancel_code_completion_later(text_edit)

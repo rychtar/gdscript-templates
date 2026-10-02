@@ -5,6 +5,7 @@ extends RefCounted
 var tree: SceneTree
 var failures: Array[String] = []
 var _nodes: Array[Node] = []
+var _temp_dirs: Array[String] = []
 
 func check(description: String, got: Variant, expected: Variant) -> void:
 	if typeof(got) != typeof(expected) or got != expected:
@@ -25,7 +26,23 @@ func make_edit(text: String, line: int = -1, column: int = -1) -> CodeEdit:
 	edit.set_caret_column(column if column >= 0 else edit.get_line(edit.get_caret_line()).length())
 	return edit
 
+# an empty folder that is deleted after the test
+func make_temp_dir() -> String:
+	var dir := OS.get_temp_dir().path_join("gdscript_templates_test_%d_%d" % [OS.get_process_id(), _temp_dirs.size()])
+	DirAccess.make_dir_recursive_absolute(dir)
+	_temp_dirs.append(dir)
+	return dir
+
+func write_file(path: String, content: String) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string(content)
+
 func cleanup() -> void:
 	for node in _nodes:
 		node.free()
 	_nodes.clear()
+	for dir in _temp_dirs:
+		for file in DirAccess.get_files_at(dir):
+			DirAccess.remove_absolute(dir.path_join(file))
+		DirAccess.remove_absolute(dir)
+	_temp_dirs.clear()

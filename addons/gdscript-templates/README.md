@@ -49,7 +49,7 @@ The template browser (`Ctrl+Space`) lists all templates by category, with the on
 you use the most at the top, and shows a preview. Type to search keywords,
 descriptions and categories, then press `Enter` or `Tab` to insert the selected template.
 
-There are more than 100 built-in templates: functions (`func`, `ready`, `process`),
+There are more than 110 built-in templates: functions (`func`, `ready`, `process`),
 variables (`export`, `onready`, `prop`), control flow (`if`, `ife`, `for`, `fori`, `match`),
 signals (`signal`, `sigcon`, `awaitsig`), nodes (`addch`, `getnode`), tweens,
 movement (`move2d`), a state machine (`statem`), files (`fread`, `fwrite`), math and more.

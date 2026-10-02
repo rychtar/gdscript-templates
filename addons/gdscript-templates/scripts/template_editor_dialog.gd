@@ -117,22 +117,35 @@ func _ask_to_save() -> void:
 	ask.popup_centered()
 
 func _build() -> void:
-	var editor_theme := EditorInterface.get_editor_theme()
-	var scale := EditorInterface.get_editor_scale()
-	var code_font := editor_theme.get_font("source", "EditorFonts")
-	var code_font_size := editor_theme.get_font_size("source_size", "EditorFonts")
-
 	var split := HSplitContainer.new()
 	add_child(split)
+	split.add_child(_build_list_panel())
 
+	_details = VBoxContainer.new()
+	_details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	split.add_child(_details)
+	_details.add_child(_build_fields())
+
+	_status = Label.new()
+	_status.modulate.a = 0.6
+	_details.add_child(_status)
+
+	_details.add_child(_build_editors())
+
+	_params_info = Label.new()
+	_params_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_details.add_child(_params_info)
+	_details.add_child(_build_help())
+
+# the search, the list of templates and the buttons under it
+func _build_list_panel() -> Control:
 	var left := VBoxContainer.new()
-	left.custom_minimum_size = Vector2(240, 0) * scale
-	split.add_child(left)
+	left.custom_minimum_size = Vector2(240, 0) * EditorInterface.get_editor_scale()
 
 	_search = LineEdit.new()
 	_search.placeholder_text = "Filter templates"
 	_search.clear_button_enabled = true
-	_search.right_icon = editor_theme.get_icon("Search", "EditorIcons")
+	_search.right_icon = EditorInterface.get_editor_theme().get_icon("Search", "EditorIcons")
 	_search.text_changed.connect(func(_text): _refresh_list())
 	left.add_child(_search)
 
@@ -145,8 +158,7 @@ func _build() -> void:
 
 	_list = ItemList.new()
 	_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_list.add_theme_font_override("font", code_font)
-	_list.add_theme_font_size_override("font_size", code_font_size)
+	_use_code_font(_list)
 	_list.item_selected.connect(func(index): _load(_keys[index]))
 	left.add_child(_list)
 
@@ -157,15 +169,13 @@ func _build() -> void:
 	buttons.add_child(_duplicate_button)
 	_remove_button = _create_button("Delete", "Remove", _on_remove_pressed)
 	buttons.add_child(_remove_button)
+	return left
 
-	var right := VBoxContainer.new()
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	split.add_child(right)
-	_details = right
-
+# keyword, description, category and where the template is available
+func _build_fields() -> Control:
+	var editor_theme := EditorInterface.get_editor_theme()
 	var grid := GridContainer.new()
 	grid.columns = 2
-	right.add_child(grid)
 
 	grid.add_child(_create_label("Keyword"))
 	_keyword = LineEdit.new()
@@ -213,15 +223,13 @@ func _build() -> void:
 	_scope.tooltip_text = "Project templates are saved to %s, you can commit it and share it with your team." % TemplateStore.PROJECT_PATH
 	_scope.item_selected.connect(_on_scope_selected)
 	grid.add_child(_scope)
+	return grid
 
-	_status = Label.new()
-	_status.modulate.a = 0.6
-	right.add_child(_status)
-
-	# the template and what it expands to, the divider is movable
+# the template and what it expands to, the divider is movable
+func _build_editors() -> Control:
+	var scale := EditorInterface.get_editor_scale()
 	var editors := VSplitContainer.new()
 	editors.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right.add_child(editors)
 
 	_body = CodeEdit.new()
 	_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -229,8 +237,7 @@ func _build() -> void:
 	_body.gutters_draw_line_numbers = true
 	_body.indent_use_spaces = false
 	_body.syntax_highlighter = Settings.create_gdscript_highlighter()
-	_body.add_theme_font_override("font", code_font)
-	_body.add_theme_font_size_override("font_size", code_font_size)
+	_use_code_font(_body)
 	_body.text_changed.connect(_on_entry_changed)
 	editors.add_child(_body)
 
@@ -247,14 +254,11 @@ func _build() -> void:
 	_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_preview.custom_minimum_size = Vector2(0, 80) * scale
 	_preview.syntax_highlighter = Settings.create_gdscript_highlighter()
-	_preview.add_theme_font_override("font", code_font)
-	_preview.add_theme_font_size_override("font_size", code_font_size)
+	_use_code_font(_preview)
 	preview_box.add_child(_preview)
+	return editors
 
-	_params_info = Label.new()
-	_params_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	right.add_child(_params_info)
-
+func _build_help() -> Control:
 	var help := Label.new()
 	help.text = "{name} - parameter, filled from words typed after the keyword or selected with Tab after expansion\n" \
 		+ "{name=value} - parameter with a default value\n" \
@@ -264,7 +268,13 @@ func _build() -> void:
 		+ "Options and shortcuts: Editor Settings > Plugins > GDScript Templates (enable Advanced Settings)"
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	help.modulate.a = 0.6
-	right.add_child(help)
+	return help
+
+# the font of the script editor
+func _use_code_font(control: Control) -> void:
+	var editor_theme := EditorInterface.get_editor_theme()
+	control.add_theme_font_override("font", editor_theme.get_font("source", "EditorFonts"))
+	control.add_theme_font_size_override("font_size", editor_theme.get_font_size("source_size", "EditorFonts"))
 
 func _create_button(text: String, icon_name: String, callback: Callable) -> Button:
 	var button := Button.new()
