@@ -23,6 +23,11 @@ var session: TabStopSession
 var popup: CompletionPopup
 var hooked_text_edits: Dictionary = {}
 
+# compiled once, they are used on every key press
+var _completion_word_regex := RegEx.create_from_string("(^|[^.$%@\\w])(\\w+)$")
+var _trailing_word_regex := RegEx.create_from_string("\\w+$")
+var _non_space_regex := RegEx.create_from_string("\\S+")
+
 func _enter_tree():
 
 	Settings.register()
@@ -56,6 +61,8 @@ func _exit_tree():
 	for text_edit in hooked_text_edits.values():
 		if not is_instance_valid(text_edit):
 			continue
+		if text_edit.tree_exited.is_connected(_on_hooked_text_edit_exited):
+			text_edit.tree_exited.disconnect(_on_hooked_text_edit_exited)
 		if text_edit.gui_input.is_connected(_on_text_edit_gui_input):
 			text_edit.gui_input.disconnect(_on_text_edit_gui_input)
 		if text_edit is CodeEdit and text_edit.code_completion_requested.is_connected(_on_code_completion_requested):
@@ -81,7 +88,10 @@ func _hook_current_text_edit():
 	if text_edit is CodeEdit:
 		text_edit.code_completion_requested.connect(_on_code_completion_requested.bind(text_edit))
 	hooked_text_edits[text_edit.get_instance_id()] = text_edit
-	text_edit.tree_exited.connect(func(): hooked_text_edits.erase(text_edit.get_instance_id()), CONNECT_ONE_SHOT)
+	text_edit.tree_exited.connect(_on_hooked_text_edit_exited.bind(text_edit), CONNECT_ONE_SHOT)
+
+func _on_hooked_text_edit_exited(text_edit: TextEdit):
+	hooked_text_edits.erase(text_edit.get_instance_id())
 
 # gui_input is emitted before CodeEdit handles the event, accept_event() blocks the default action
 func _on_text_edit_gui_input(event: InputEvent, text_edit: TextEdit):
@@ -151,7 +161,7 @@ func _completion_word(text_edit: CodeEdit) -> String:
 	if text_edit.is_in_string(line_idx, column) != -1 or text_edit.is_in_comment(line_idx, column) != -1:
 		return ""
 	var before_caret = text_edit.get_line(line_idx).substr(0, column)
-	var result = RegEx.create_from_string("(^|[^.$%@\\w])(\\w+)$").search(before_caret)
+	var result = _completion_word_regex.search(before_caret)
 	return result.get_string(2) if result else ""
 
 # Enter / Tab on a template in the code completion popup expands it
@@ -169,7 +179,7 @@ func _confirm_template_completion(text_edit: CodeEdit, event: InputEventKey) -> 
 	text_edit.cancel_code_completion()
 	var line_idx = text_edit.get_caret_line()
 	var caret_column = text_edit.get_caret_column()
-	var word = RegEx.create_from_string("\\w+$").search(text_edit.get_line(line_idx).substr(0, caret_column))
+	var word = _trailing_word_regex.search(text_edit.get_line(line_idx).substr(0, caret_column))
 	var start_column = word.get_start() if word else caret_column
 	insert_template(text_edit, keyword, Vector2i(line_idx, start_column), Vector2i(line_idx, caret_column))
 	return true
@@ -187,24 +197,44 @@ func _cancel_code_completion_later(text_edit: TextEdit):
 func _find_keyword_before_caret(text_edit: TextEdit) -> Dictionary:
 	var line_idx = text_edit.get_caret_line()
 	var before_caret = text_edit.get_line(line_idx).substr(0, text_edit.get_caret_column())
-	var words = RegEx.create_from_string("\\S+").search_all(before_caret)
+	var words = _non_space_regex.search_all(before_caret)
 
-	for i in range(words.size() - 1, -1, -1):
-		var keyword = store.find_keyword(words[i].get_string())
-		# odd number of quotes before the word - it's inside a string or a quoted param
-		if keyword.is_empty() or before_caret.substr(0, words[i].get_start()).count("\"") % 2 == 1:
-			continue
-		# "quoted text" is one param
-		var params = TemplateExpander.split_args(before_caret.substr(words[i].get_end()))
-		return {
-			"keyword": keyword,
-			"word": words[i].get_string(),
-			"start_column": words[i].get_start(),
-			"params": params.map(func(param): return param.value),
-			# as typed, with quotes
-			"raw_params": params.map(func(param): return param.raw),
-		}
+	# an exact match wins over a case insensitive one: in "onready timer Timer" the keyword is
+	# "timer", the type "Timer" is its parameter
+	for case_sensitive in [true, false]:
+		for i in range(words.size() - 1, -1, -1):
+			var keyword = store.find_keyword(words[i].get_string(), case_sensitive)
+			if keyword.is_empty() or _ends_in_string_or_comment(before_caret.substr(0, words[i].get_start())):
+				continue
+			# "quoted text" is one param
+			var params = TemplateExpander.split_args(before_caret.substr(words[i].get_end()))
+			return {
+				"keyword": keyword,
+				"word": words[i].get_string(),
+				"start_column": words[i].get_start(),
+				"params": params.map(func(param): return param.value),
+				# as typed, with quotes
+				"raw_params": params.map(func(param): return param.raw),
+			}
 	return {}
+
+# true when the text ends inside a string or a quoted param, or after a # comment starts
+static func _ends_in_string_or_comment(text: String) -> bool:
+	var quote = ""
+	var i = 0
+	while i < text.length():
+		var c = text[i]
+		if quote.is_empty():
+			if c == "#":
+				return true
+			if c == "\"" or c == "'":
+				quote = c
+		elif c == "\\":
+			i += 1
+		elif c == quote:
+			quote = ""
+		i += 1
+	return not quote.is_empty()
 
 func expand_template_at_caret(text_edit: TextEdit) -> bool:
 	store.reload_if_changed()
@@ -244,7 +274,7 @@ func show_templates_popup(text_edit: TextEdit):
 			from.y = found.start_column
 		else:
 			var line = text_edit.get_line(line_idx)
-			var partial = RegEx.create_from_string("\\w+$").search(line.substr(0, from.y))
+			var partial = _trailing_word_regex.search(line.substr(0, from.y))
 			if partial:
 				filter = partial.get_string()
 				from.y = partial.get_start()

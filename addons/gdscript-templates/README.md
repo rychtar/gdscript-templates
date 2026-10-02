@@ -34,7 +34,8 @@ skip get their default value (or their name) and are selected one by one:
 `vec 10` gives `Vector2(10, 0)` with `0` selected, so you can type its value and
 press `Tab` to go to the next one. A parameter used more than once (like `{name}`
 in `prop`) only needs to be typed once. Put a value with spaces in quotes:
-`func move "delta: float"`.
+`func move "delta: float"`. Quotes also keep a value that is itself a keyword from being
+taken for the template: `if "input"`.
 
 Select some code and press `Ctrl+E` (or `Ctrl+Space`) to wrap it in a template:
 `if`, `ife`, `for`, `fori`, `while`, `region`, `isval`, `isnull`, `dicthas` and

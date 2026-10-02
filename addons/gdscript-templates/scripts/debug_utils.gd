@@ -8,7 +8,7 @@ const DEBUG := false
 static var ENABLE_DEBUG := _detect_dev_mode() or DEBUG
 
 static func _detect_dev_mode() -> bool:
-	var project_name = ProjectSettings.get("application/config/name")	
+	var project_name = ProjectSettings.get("application/config/name")
 	return project_name == EXPECTED_PROJECT_NAME
 
 static func log(msg: String) -> void:

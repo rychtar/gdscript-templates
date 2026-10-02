@@ -8,7 +8,7 @@ extends RefCounted
 var text_edit: TextEdit
 var active: bool = false
 
-var _stops: Array[Dictionary] = []  # {name, line, column, length}
+var _stops: Array[Dictionary] = []  # {name, line, column, length, order}
 var _primary: Array[int] = []       # first occurrence of each parameter
 var _cursor: Dictionary             # final caret position
 var _current: int = -1
@@ -23,10 +23,10 @@ func _init(p_text_edit: TextEdit, expanded: Dictionary, start_line: int, start_c
 		var pos = _offset_to_position(text, stop.offset, start_line, start_column)
 		if not _stops.any(func(s): return s.name == stop.name):
 			_primary.append(_stops.size())
-		_stops.append({"name": stop.name, "line": pos.x, "column": pos.y, "length": stop.length})
+		_stops.append({"name": stop.name, "line": pos.x, "column": pos.y, "length": stop.length, "order": _stops.size()})
 
 	var cursor_pos = _offset_to_position(text, expanded.cursor, start_line, start_column)
-	_cursor = {"name": "", "line": cursor_pos.x, "column": cursor_pos.y, "length": 0}
+	_cursor = {"name": "", "line": cursor_pos.x, "column": cursor_pos.y, "length": 0, "order": expanded.cursor_order}
 	_stops.append(_cursor)
 
 func start() -> void:
@@ -141,11 +141,14 @@ func _commit_current() -> void:
 		_shift_stops_after(other, value.length() - old_length)
 	text_edit.end_complex_operation()
 
+# stops at the same column (after an empty one) are told apart by their order in the text
 func _shift_stops_after(changed: Dictionary, delta: int) -> void:
 	if delta == 0:
 		return
 	for stop in _stops:
-		if not is_same(stop, changed) and stop.line == changed.line and stop.column > changed.column:
+		if is_same(stop, changed) or stop.line != changed.line:
+			continue
+		if stop.column > changed.column or (stop.column == changed.column and stop.order > changed.order):
 			stop.column += delta
 
 func _move_to_cursor() -> void:
