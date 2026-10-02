@@ -16,7 +16,7 @@ fori 5         →  for i in range(5):
 Copy `addons/gdscript-templates` into your project's `addons` folder and enable
 **GDScript Templates** in **Project → Project Settings → Plugins**.
 
-Requires Godot 4.2+ (tested with 4.7).
+Requires Godot 4.5+ (tested with 4.7).
 
 ## Usage
 
